@@ -42,6 +42,7 @@ export function HeroSlider() {
               src={slide.image || "/placeholder.svg"}
               alt={slide.title}
               fill
+              sizes="100vw"
               className="object-cover"
               priority={index === 0}
             />

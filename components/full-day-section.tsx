@@ -205,6 +205,7 @@ export function FullDaySection() {
                       src={speaker.image || "/placeholder.svg"}
                       alt={speaker.name}
                       fill
+                      sizes="(min-width: 640px) 112px, 96px"
                       className="rounded-full object-cover border-2 border-[var(--brand-cyan)]/30"
                     />
                   </div>

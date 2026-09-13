@@ -24,6 +24,7 @@ export function TeamSection() {
                     src={teamData.academicAdvocate.image || "/placeholder.svg"}
                     alt={teamData.academicAdvocate.name}
                     fill
+                    sizes="(min-width: 640px) 176px, 160px"
                     className="rounded-full object-cover"
                   />
                 </div>
@@ -41,6 +42,7 @@ export function TeamSection() {
                     src={teamData.directivaGeneral[0]?.image || "/placeholder.svg"}
                     alt={teamData.directivaGeneral[0]?.name ?? "Presidente"}
                     fill
+                    sizes="(min-width: 640px) 176px, 160px"
                     className="rounded-full object-cover"
                   />
                 </div>
@@ -70,6 +72,7 @@ export function TeamSection() {
                     src={member.image || "/placeholder.svg"}
                     alt={member.name}
                     fill
+                    sizes="(min-width: 640px) 176px, 160px"
                     className="rounded-full object-cover"
                   />
                 </div>
@@ -97,6 +100,7 @@ export function TeamSection() {
                     src={member.image || "/placeholder.svg"}
                     alt={member.name}
                     fill
+                    sizes="(min-width: 640px) 176px, 160px"
                     className="rounded-full object-cover"
                   />
                 </div>
@@ -123,6 +127,7 @@ export function TeamSection() {
                     src={member.image || "/placeholder.svg"}
                     alt={member.name}
                     fill
+                    sizes="(min-width: 640px) 176px, 160px"
                     className="rounded-full object-cover"
                   />
                 </div>
