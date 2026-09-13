@@ -1,0 +1,26 @@
+{
+  "slides": [
+    {
+      "id": 1,
+      "title": "ISACA UNT Student Group",
+      "subtitle": "Liderando en Auditoría, Gobierno y Seguridad de TI",
+      "description": "Somos un grupo estudiantil motivado por los temas de Auditoría y Seguridad de la Información, promoviendo la educación más allá del aula.",
+      "image": "/images/slide/slide-group-1.jpeg",
+      "cta": {
+        "text": "Únete a Nosotros",
+        "link": "#nosotros"
+      }
+    },
+    {
+      "id": 2,
+      "title": "Desarrolla tu Carrera Profesional",
+      "subtitle": "Certificaciones y Networking",
+      "description": "Conéctate con profesionales de la industria y accede a oportunidades de certificación en CISA, CISM, CGEIT y CRISC.",
+      "image": "/images/slide/slide-group-2.jpeg",
+      "cta": {
+        "text": "Conoce Más",
+        "link": "#student-group"
+      }
+    }
+  ]
+}

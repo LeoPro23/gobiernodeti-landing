@@ -1,0 +1,116 @@
+{
+  "title": "XI FULL DAY ISACA UNT",
+  "subtitle": "Conectando con la tecnología y la innovación",
+  "description": [
+    "ISACA UNT Student Group tiene el agrado de invitarlos al XI FULL DAY ISACA UNT, un evento que conecta la tecnología, la innovación y la ciberseguridad en un solo espacio.",
+    "Durante esta jornada, destacados ponentes nacionales e internacionales compartirán sus experiencias en gobierno de TI, auditoría, seguridad y transformación digital, abriendo un panorama inspirador para futuros profesionales del sector.",
+    "¡No te pierdas esta oportunidad de aprendizaje, networking y desarrollo profesional!"
+  ],
+  "highlights": [
+    "Ponencias magistrales sobre gobierno de TI, auditoría y ciberseguridad.",
+    "Casos reales y estrategias de transformación digital.",
+    "Espacios de networking con profesionales del ecosistema ISACA."
+  ],
+  "date": "2025-11-29T08:00:00-05:00",
+  "details": {
+    "date": "29 de noviembre de 2025",
+    "time": "8:00 a.m.",
+    "location": "Auditorio Copérnico – Universidad Nacional de Trujillo"
+  },
+  "registration": {
+    "ctaText": "Inscríbete ahora",
+    "link": "https://docs.google.com/forms/d/e/1FAIpQLScQKhOgQSUrBnYM-3yvWaZThuSW1t3pXcIblzh0FEntKZjN3w/viewform"
+  },
+  "speakers": [
+    {
+      "name": "Stanley Velando",
+      "role": "Ponente",
+      "image": "/images/speakers/stanley.webp",
+      "linkedin": "https://www.linkedin.com/in/stanleyvelando/"
+    },
+    {
+      "name": "Rómulo Lomparte",
+      "role": "Ponente",
+      "image": "/images/speakers/romulo.webp",
+      "linkedin": "https://www.linkedin.com/in/romulo-lomparte/"
+    },
+    {
+      "name": "Antonio Jiménez",
+      "role": "Ponente",
+      "image": "/images/speakers/antonio.webp",
+      "linkedin": "https://www.linkedin.com/in/ajimenezo/"
+    },
+    {
+      "name": "Alberto Mendoza",
+      "role": "Ponente",
+      "image": "/images/speakers/alberto.webp",
+      "linkedin": "https://www.linkedin.com/in/alberto-mendoza-de-los-santos-9a391728/"
+    },
+    {
+      "name": "Grecia Chávez",
+      "role": "Ponente",
+      "image": "/images/speakers/grecia.webp",
+      "linkedin": "https://www.linkedin.com/in/greciachavezgonzales/"
+    }
+  ],
+  "plans": [
+    {
+      "id": "estudiante-basico",
+      "type": "Estudiante",
+      "category": "BÁSICO",
+      "price": 30,
+      "promoPrice": 20,
+      "color": "#D97757",
+      "features": ["Ponencias Magistrales"]
+    },
+    {
+      "id": "estudiante-completo",
+      "type": "Estudiante",
+      "category": "COMPLETO",
+      "price": 40,
+      "promoPrice": 30,
+      "color": "#B94654",
+      "features": ["Ponencias Magistrales", "Material de Apoyo", "Certificado"]
+    },
+    {
+      "id": "profesional-basico",
+      "type": "Profesional",
+      "category": "BÁSICO",
+      "price": 50,
+      "promoPrice": null,
+      "color": "#6B6B8A",
+      "features": ["Ponencias Magistrales"]
+    },
+    {
+      "id": "profesional-completo",
+      "type": "Profesional",
+      "category": "COMPLETO",
+      "price": 60,
+      "promoPrice": null,
+      "color": "#1A6B7A",
+      "features": ["Ponencias Magistrales", "Material de Apoyo", "Certificado"]
+    }
+  ],
+  "paymentMethods": [
+    {
+      "name": "Yape / Plin",
+      "contact": "SERGIO HELÍ DIAZ SIFUENTES",
+      "number": "968 350 969",
+      "icon": "phone"
+    },
+    {
+      "name": "BCP",
+      "contact": "SERGIO HELÍ DIAZ SIFUENTES",
+      "account": "57077216825046",
+      "cci": "00257017721682504605",
+      "icon": "bank"
+    },
+    {
+      "name": "Banco",
+      "contact": "SERGIO HELÍ DIAZ SIFUENTES",
+      "account": "8983358914367",
+      "cci": "003888013358914367745",
+      "icon": "bank"
+    }
+  ]
+}

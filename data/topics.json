@@ -1,0 +1,52 @@
+{
+  "topics": [
+    {
+      "id": "auditoria",
+      "title": "Auditoría de Sistemas",
+      "description": "Es el estudio que comprende el análisis y gestión de sistemas llevado a cabo por profesionales para identificar, enumerar y posteriormente describir las diversas vulnerabilidades que pudieran presentarse en una revisión exhaustiva de las estaciones de trabajo.",
+      "icon": "shield-check"
+    },
+    {
+      "id": "seguridad",
+      "title": "Seguridad de la Información",
+      "description": "La seguridad de la información es el conjunto de medidas preventivas y reactivas de las organizaciones y de los sistemas tecnológicos que permiten resguardar y proteger la información buscando mantener la confidencialidad, la disponibilidad e integridad de la misma.",
+      "icon": "lock"
+    },
+    {
+      "id": "gobierno",
+      "title": "Gobierno de las TI",
+      "description": "Se entiende por gobierno de las tecnologías de la información al conjunto de acciones que realiza el área de TI en coordinación con la alta dirección para movilizar sus recursos de la forma más eficiente en respuesta a requisitos regulatorios, operativos o del negocio.",
+      "icon": "building"
+    },
+    {
+      "id": "riesgos",
+      "title": "Riesgos de TI",
+      "description": "Esta orientada a la planeación de recuperación de desastres, podrá aprender cómo empezar con una evaluación de riesgo, cómo prepararla, y cuáles son los peligros naturales y los peligros creados por el hombre, en el proceso de evaluación de riesgos, en los distintos ambientes del trabajo.",
+      "icon": "alert-triangle"
+    },
+    {
+      "id": "seguridad-informatica",
+      "title": "Seguridad de la Informática",
+      "description": "La seguridad informática o seguridad de tecnologías de la información es el área de la informática que se enfoca en la protección de la infraestructura computacional y todo lo relacionado con esta y, especialmente, la información contenida o circulante.",
+      "icon": "server"
+    },
+    {
+      "id": "ethical-hacking",
+      "title": "Ethical Hacking",
+      "description": "El Ethical Hacking es el proceso por el cual, se utilizan las mismas técnicas y herramientas de un atacante malicioso para atacar a una organización de una manera controlada; esta filosofía resulta de la práctica probada: 'para atrapar a un ladrón debes pensar como un ladrón.'",
+      "icon": "code"
+    },
+    {
+      "id": "continuidad",
+      "title": "Continuidad de Negocios",
+      "description": "La continuidad de negocios es un plan logístico para la práctica de cómo una organización debe recuperar y restaurar sus funciones críticas parcial o totalmente interrumpidas dentro de un tiempo predeterminado después de una interrupción no deseada o desastre.",
+      "icon": "refresh-cw"
+    },
+    {
+      "id": "sgsi",
+      "title": "SGS de Información",
+      "description": "Un sistema de gestión de la seguridad de la información (SGSI) es, como el nombre lo sugiere, un conjunto de políticas de administración de la información. El término es utilizado principalmente por la ISO/IEC 27001, aunque no es la única normativa que utiliza este término o concepto.",
+      "icon": "file-check"
+    }
+  ]
+}

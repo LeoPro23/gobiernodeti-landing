@@ -1,0 +1,103 @@
+{
+  "academicAdvocate": {
+    "name": "Alberto Carlos Mendoza De los Santos",
+    "role": "ACADEMIC ADVOCATE",
+    "image": "/images/members/alberto.webp"
+  },
+  "directivaGeneral": [
+    {
+      "name": "Díaz Sifuentes Sergio",
+      "role": "Presidente",
+      "cycle": "VIII",
+      "image": "/images/members/sergio.webp"
+    },
+    {
+      "name": "Robles Romero Ronaldo Carlos",
+      "role": "Vicepresidente",
+      "cycle": "VI",
+      "image": "/images/members/ronaldo.webp"
+    },
+    {
+      "name": "Venturo Ramos Alexander Josue",
+      "role": "Director Operativo",
+      "cycle": "VIII",
+      "image": "/images/members/alexander.webp"
+    },
+    {
+      "name": "Solorzano Sanchez Yoel Armando",
+      "role": "Coordinador Ejecutivo",
+      "cycle": "VIII",
+      "image": "/images/members/yoel.webp"
+    },
+    {
+      "name": "Guevara Valencia Ingrid Maricel",
+      "role": "Coordinador Ejecutivo",
+      "cycle": "VIII",
+      "image": "/images/members/ingrid.webp"
+    }
+  ],
+  "relacionesSociales": [
+    {
+      "name": "Leonard Mayanga",
+      "role": "Comité de Relaciones Sociales",
+      "cycle": "II",
+      "image": "/images/members/default-avatar.svg"
+    },
+    {
+      "name": "Ariana Vargas",
+      "role": "Comité de Relaciones Sociales",
+      "cycle": "II",
+      "image": "/images/members/ariana.webp"
+    },
+    {
+      "name": "Valentina Rivas",
+      "role": "Comité de Relaciones Sociales",
+      "cycle": "VI",
+      "image": "/images/members/default-avatar.svg"
+    },
+    {
+      "name": "Gian Franco Samana",
+      "role": "Comité de Relaciones Sociales",
+      "cycle": "VIII",
+      "image": "/images/members/gian-franco.webp"
+    },
+    {
+      "name": "Alex Gil",
+      "role": "Comité de Relaciones Sociales",
+      "cycle": "VIII",
+      "image": "/images/members/alex.webp"
+    }
+  ],
+  "marketing": [
+    {
+      "name": "Leonardo Guimaray",
+      "role": "Comité de Marketing",
+      "cycle": "VIII",
+      "image": "/images/members/leonardo.webp"
+    },
+    {
+      "name": "Miguel Cabanillas",
+      "role": "Comité de Marketing",
+      "cycle": "VIII",
+      "image": "/images/members/miguel.webp"
+    },
+    {
+      "name": "Ashley Córdova",
+      "role": "Comité de Marketing",
+      "cycle": "VIII",
+      "image": "/images/members/ashley.webp"
+    },
+    {
+      "name": "Anghela Herrera",
+      "role": "Comité de Marketing",
+      "cycle": "VI",
+      "image": "/images/members/default-avatar.svg"
+    },
+    {
+      "name": "Ivan Fernandez",
+      "role": "Comité de Marketing",
+      "cycle": "VIII",
+      "image": "/images/members/ivan.webp"
+    }
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "benefits": [
+    {
+      "id": 1,
+      "title": "Aprendizaje más allá del aula",
+      "description": "Te desarrollarás en un foro para el aprendizaje y ganarás oportunidades de liderazgo."
+    },
+    {
+      "id": 2,
+      "title": "Eventos Actuales",
+      "description": "Serás parte de eventos en gobierno de TI, auditoría, seguridad y control con estudiantes de otras disciplinas."
+    },
+    {
+      "id": 3,
+      "title": "Networking Profesional",
+      "description": "Tendrás la posibilidad de contactar con profesionales de los capítulos locales."
+    },
+    {
+      "id": 4,
+      "title": "Asesoría Especializada",
+      "description": "Podrás obtener asesoría de profesionales con experiencia en la carrera."
+    },
+    {
+      "id": 5,
+      "title": "Oportunidades Laborales",
+      "description": "Contacta líderes de la industria con oportunidades de trabajo post-grado."
+    }
+  ]
+}
