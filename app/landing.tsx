@@ -3,6 +3,7 @@
 import { useEffect, useState, useSyncExternalStore, type CSSProperties } from "react"
 import Image from "next/image"
 import { ArrowRight, BarChart3, CalendarDays, Check, Clock3, Cloud, Crown, GraduationCap, MapPin, Menu, Network, Palette, Play, Rocket, Settings, ShieldCheck, Ticket, Users, X } from "lucide-react"
+import { speakers } from "./speakers"
 
 // Inicio del evento en hora de Lima: el contador y la fecha del hero se calculan desde aquí.
 const EVENT_START = new Date("2026-11-21T09:00:00-05:00")
@@ -18,15 +19,6 @@ const benefits = [
   { title: "Casos reales", detail: "de la industria", icon: Settings },
   { title: "Certificado", detail: "de participación", icon: Ticket },
   { title: "Oportunidades", detail: "laborales y alianzas", icon: BarChart3 },
-]
-
-const speakers = [
-  { name: "Carlos Méndez", role: "Technology Lead", company: "Microsoft", talk: "IA y Productividad en la Empresa", image: "/images/event/speaker-carlos.png" },
-  { name: "Lucía Torres", role: "Cloud Solutions Architect", company: "AWS", talk: "Arquitecturas en la Nube para el Futuro", image: "/images/event/speaker-lucia.png" },
-  { name: "Andrés Rojas", role: "CTO LATAM", company: "Globant", talk: "Innovación y Transformación Digital", image: "/images/event/speaker-andres.png" },
-  { name: "María Fernanda Díaz", role: "Cybersecurity Specialist", company: "Google", talk: "Ciberseguridad en la Era de la IA", image: "/images/event/speaker-maria.png" },
-  { name: "Javier Soto", role: "Product Manager", company: "Meta", talk: "Gestión de Productos Tecnológicos", image: "/images/event/speaker-javier.png" },
-  { name: "Diego Valverde", role: "Director de TI", company: "BBVA", talk: "Estrategia de TI para Negocios Agile", image: "/images/event/speaker-diego.png" },
 ]
 
 const agenda = [
@@ -88,7 +80,7 @@ function SiteHeader({ onFaq }: { onFaq: () => void }) {
   return <header className={scrolled || menuOpen ? "site-header site-header--scrolled" : "site-header"}><div className="page-width site-header-inner">
     <Brand />
     <nav className={menuOpen ? "nav-links nav-links--open" : "nav-links"} aria-label="Navegación principal">
-      {navLinks.map(([id, label]) => <a key={id} href={`#${id}`} className={active === id ? "is-active" : undefined} aria-current={active === id ? "true" : undefined} onClick={() => setMenuOpen(false)}>{label}</a>)}<button type="button" onClick={() => { onFaq(); setMenuOpen(false) }}>FAQ</button>
+      {navLinks.map(([id, label]) => <a key={id} href={id === "ponentes" ? "/ponentes" : `#${id}`} className={active === id ? "is-active" : undefined} aria-current={active === id ? "true" : undefined} onClick={() => setMenuOpen(false)}>{label}</a>)}<button type="button" onClick={() => { onFaq(); setMenuOpen(false) }}>FAQ</button>
     </nav>
     <a className="button button--gradient header-cta" href="#entradas">REGÍSTRATE AHORA</a>
     <button type="button" className="menu-toggle" aria-label={menuOpen ? "Cerrar menú" : "Abrir menú"} aria-expanded={menuOpen} onClick={() => setMenuOpen(!menuOpen)}>{menuOpen ? <X /> : <Menu />}</button>
@@ -142,7 +134,7 @@ export default function Landing() {
       </div></section>
 
       <section className="section speakers-section" id="ponentes"><div className="page-width">
-        <div className="section-heading" data-reveal><div><span className="eyebrow">PONENTES</span><h2>LÍDERES QUE ESTÁN TRANSFORMANDO EL FUTURO</h2><i /></div><a className="button button--outline section-link" href="#speakers-list">VER TODOS LOS PONENTES <ArrowRight size={16} /></a></div>
+        <div className="section-heading" data-reveal><div><span className="eyebrow">PONENTES</span><h2>LÍDERES QUE ESTÁN TRANSFORMANDO EL FUTURO</h2><i /></div><a className="button button--outline section-link" href="/ponentes">VER TODOS LOS PONENTES <ArrowRight size={16} /></a></div>
         <div className="speaker-grid" id="speakers-list">{speakers.map((speaker, index) => <article className="speaker-card" key={speaker.name} data-reveal style={stagger(index)}><div className="speaker-photo"><Image src={speaker.image} alt={`Retrato de ${speaker.name}`} width={400} height={300} /></div><div className="speaker-info"><h3>{speaker.name}</h3><p>{speaker.role}</p><p className={speaker.company === "Google" ? "google-word" : ""}>{speaker.company}</p></div><div className="speaker-talk">{speaker.talk}</div></article>)}</div>
       </div></section>
 
@@ -159,7 +151,7 @@ export default function Landing() {
 
       <section className="venue-section" id="lugar"><div className="page-width venue-grid"><div className="venue-copy" data-reveal="left"><span className="eyebrow">LUGAR</span><h2>CENTRO DE CONVENCIONES LIMA</h2><p><MapPin size={19} fill="currentColor" /> Av. Arequipa 1234, Lima, Perú</p></div><Image src="/images/event/venue.png" alt="Exterior iluminado del centro de convenciones al atardecer" width={400} height={200} className="venue-photo" data-reveal="zoom" style={stagger(1, 120)} /><div className="last-call" data-reveal="right" style={stagger(2, 120)}><Ticket /><div><h3>LAS ENTRADAS SON LIMITADAS</h3><p>Sé parte del XII FULLDAY y vive una experiencia que potenciará tu futuro profesional.</p><a className="button button--gradient" href="#entradas">REGÍSTRATE AHORA <ArrowRight size={16} /></a></div></div></div></section>
 
-      <footer className="footer"><div className="page-width footer-inner"><Brand dark /><nav aria-label="Navegación del pie de página"><a href="#inicio">Inicio</a><a href="#ponentes">Ponentes</a><a href="#temario">Temario</a><a href="#lugar">Lugar</a><button type="button" onClick={() => setModal("faq")}>FAQ</button><a href="mailto:contacto@fullday.pe">Contacto</a></nav><div className="socials"><a href="https://www.linkedin.com/" aria-label="LinkedIn">in</a><a href="https://www.instagram.com/" aria-label="Instagram">◎</a><a href="https://www.facebook.com/" aria-label="Facebook">f</a><a href="https://www.youtube.com/" aria-label="YouTube">▶</a></div><small>© {eventYear} XII FULLDAY.<br />Todos los derechos reservados.</small></div></footer>
+      <footer className="footer"><div className="page-width footer-inner"><Brand dark /><nav aria-label="Navegación del pie de página"><a href="#inicio">Inicio</a><a href="/ponentes">Ponentes</a><a href="#temario">Temario</a><a href="#lugar">Lugar</a><button type="button" onClick={() => setModal("faq")}>FAQ</button><a href="mailto:contacto@fullday.pe">Contacto</a></nav><div className="socials"><a href="https://www.linkedin.com/" aria-label="LinkedIn">in</a><a href="https://www.instagram.com/" aria-label="Instagram">◎</a><a href="https://www.facebook.com/" aria-label="Facebook">f</a><a href="https://www.youtube.com/" aria-label="YouTube">▶</a></div><small>© {eventYear} XII FULLDAY.<br />Todos los derechos reservados.</small></div></footer>
 
       {modal && <div className="modal-backdrop" onMouseDown={() => setModal(null)}><div className="modal" role="dialog" aria-modal="true" aria-label={modal === "video" ? "Video del evento" : modal === "faq" ? "Preguntas frecuentes" : "Comprar entrada"} onMouseDown={event => event.stopPropagation()}><button className="modal-close" type="button" aria-label="Cerrar" onClick={() => setModal(null)}><X /></button>{modal === "video" ? <><h2>VIVE EL XII FULLDAY</h2><div className="video-preview"><Image src="/images/event/hero-stage-logo.png" alt="Auditorio del evento" fill sizes="(max-width: 600px) 90vw, 650px" /><Play size={46} fill="currentColor" /></div><p>Conecta con los profesionales que están transformando la tecnología.</p></> : modal === "faq" ? <><h2>PREGUNTAS FRECUENTES</h2><details open><summary>¿Dónde se realiza el evento?</summary><p>En el Centro de Convenciones Lima, Av. Arequipa 1234, Lima, Perú.</p></details><details><summary>¿La entrada incluye certificado?</summary><p>Sí, todos los tipos de entrada incluyen certificado de participación.</p></details><details><summary>¿A qué hora empieza?</summary><p>La primera sesión comienza a las 09:00.</p></details></> : <><h2>ENTRADA {selectedPlan}</h2><p>Completa tu inscripción para asegurar tu lugar en el XII FULLDAY.</p><form action="mailto:contacto@fullday.pe" method="post" encType="text/plain"><label>Nombre completo<input name="nombre" required placeholder="Tu nombre" /></label><label>Correo electrónico<input name="correo" type="email" required placeholder="tu@correo.com" /></label><input type="hidden" name="entrada" value={selectedPlan} /><button className="button button--gradient" type="submit">SOLICITAR ENTRADA <ArrowRight size={16} /></button></form></>}</div></div>}
     </main>

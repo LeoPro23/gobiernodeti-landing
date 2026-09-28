@@ -1,0 +1,62 @@
+.speakers-page{min-height:100vh;background:#031226;color:#f7f9ff;overflow:hidden}
+.speakers-header{position:absolute;inset:0 0 auto;z-index:20;border-bottom:1px solid #80caff24;background:linear-gradient(180deg,#020b1bdd,#020b1b28)}
+.speakers-header-inner{min-height:72px;display:flex;align-items:center;justify-content:space-between;gap:22px}
+.speakers-brand{display:block;flex:none;width:205px}
+.speakers-brand img{display:block;width:100%;height:auto;transform:translateY(-2px)}
+.speakers-nav{display:flex;align-items:center;gap:26px;font-size:11px}
+.speakers-nav a{transition:color .2s}
+.speakers-nav a:hover,.speakers-nav a[aria-current=page]{color:#57d8f7}
+.speakers-header-cta{height:35px;padding-inline:19px;flex:none}
+.speakers-mobile-nav{display:none;position:relative}
+.speakers-mobile-nav summary{display:grid;place-items:center;list-style:none;cursor:pointer;color:#fff}
+.speakers-mobile-nav summary::-webkit-details-marker{display:none}
+.speakers-mobile-nav nav{position:absolute;right:0;top:calc(100% + 17px);display:flex;flex-direction:column;min-width:205px;padding:8px;background:#081834f5;border:1px solid #285c9d;border-radius:9px;box-shadow:0 15px 30px #0008}
+.speakers-mobile-nav nav a{padding:10px;font-size:12px}
+.speakers-mobile-nav nav a[aria-current=page]{color:#57d8f7}
+.speakers-hero{position:relative;min-height:710px;isolation:isolate;background:#030e26;border-bottom:2px solid #1f6dff}
+.speakers-stage{z-index:-2;object-fit:cover;object-position:center center}
+.speakers-hero::before{content:"";position:absolute;inset:0;z-index:-1;background:linear-gradient(180deg,#01071a57 0%,#020b2390 26%,#05103930 53%,#051536b8 81%,#031226 100%),linear-gradient(90deg,#020a237a,transparent 21% 79%,#020a237a)}
+.speakers-hero::after{content:"";position:absolute;left:0;right:0;bottom:-2px;height:2px;background:linear-gradient(90deg,#1276ff,#bb30ff 25%,#35dfff 55%,#155cff);box-shadow:0 0 22px #6639ff}
+.speakers-hero-inner{position:relative;padding-top:93px;padding-bottom:42px}
+.speakers-hero-topline{display:flex;justify-content:space-between;gap:18px;color:#8bc9ed;font-size:10px;font-weight:800;letter-spacing:2.3px}
+.speakers-hero-topline span:first-child{color:#fff}
+.speakers-hero-kicker{margin:27px 0 17px;text-align:center;color:#60dfff;font-size:11px;font-weight:800;letter-spacing:6px}
+.speakers-lineup{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));align-items:end;gap:9px}
+.speakers-lineup-photo{position:relative;min-width:0;height:335px;overflow:hidden;border:1px solid #67b9ff70;border-radius:10px 10px 4px 4px;background:#061d3c;box-shadow:0 10px 35px #0009,0 0 17px #104ae757;isolation:isolate}
+.speakers-lineup-photo:nth-child(even){border-color:#aa59fb84;transform:translateY(13px)}
+.speakers-lineup-photo img{object-fit:cover;object-position:center center;filter:saturate(.92) contrast(1.04)}
+.speakers-lineup-photo::after{content:"";position:absolute;inset:45% 0 0;background:linear-gradient(180deg,transparent,#081a50a0 75%,#061135e8);pointer-events:none}
+.speakers-lineup-photo>span{position:absolute;z-index:1;left:11px;bottom:11px;color:#a8e6ff;font-size:11px;font-weight:900;letter-spacing:1px}
+.speakers-hero-title{position:relative;margin-top:-47px;text-align:center;text-shadow:0 5px 22px #020718,0 0 28px #031943}
+.speakers-hero-title>span{display:block;color:#dcf6ff;font-size:11px;font-weight:900;letter-spacing:12px}
+.speakers-hero-title h1{display:inline-block;margin:0;line-height:.91;font-size:clamp(60px,9vw,136px);font-weight:1000;letter-spacing:-7px;color:#fff;background:linear-gradient(180deg,#fff 2%,#e3efff 39%,#76d9ff 67%,#2576dc 100%);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;filter:drop-shadow(0 5px 0 #152c70) drop-shadow(0 8px 10px #02061a)}
+.speakers-hero-title p{margin:18px 0 0;color:#c2e9ff;font-size:11px;font-weight:800;letter-spacing:5px}
+.speakers-roster{position:relative;padding:71px 0 82px;background:radial-gradient(ellipse at 50% 0%,#0d2a58 0%,#071b37 48%,#031226 100%)}
+.speakers-roster-heading{display:flex;align-items:end;justify-content:space-between;gap:25px;margin-bottom:35px}
+.speakers-roster-heading h2{font-size:clamp(23px,3vw,38px);line-height:1.05;margin:0;letter-spacing:-1px}
+.speakers-roster-heading p{max-width:320px;margin:0;color:#a4b9d5;font-size:13px;line-height:1.5}
+.speakers-roster-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:0;border-top:1px solid #3d84cd80;border-bottom:1px solid #3d84cd80}
+.speakers-roster-card{min-width:0;padding:22px 13px 24px;border-left:1px solid #3d84cd66;background:linear-gradient(180deg,#0b295053,#07152d35)}
+.speakers-roster-card:first-child{border-left:0}
+.speakers-roster-card:nth-child(even){background:linear-gradient(180deg,#25215b50,#07152d35)}
+.speakers-card-number{display:block;color:#37d9ff;font-size:11px;font-weight:900;letter-spacing:2px;margin-bottom:35px}
+.speakers-roster-card h3{margin:0 0 6px;color:#fff;font-size:15px;line-height:1.03;text-transform:uppercase;overflow-wrap:anywhere}
+.speakers-card-role{min-height:41px;margin:0;color:#7cbbf4;font-size:10px;line-height:1.3;font-weight:700}
+.speakers-card-role span{color:#ad5cff}
+.speakers-card-talk{border-top:1px solid #3666a653;padding-top:15px;margin-top:14px}
+.speakers-card-talk span{font-size:9px;color:#c9a5ff;font-weight:900;letter-spacing:1.7px}
+.speakers-card-talk p{font-size:12px;line-height:1.25;margin:6px 0 0;color:#e9f5ff}
+.speakers-cta{padding:55px 0;background:linear-gradient(105deg,#11104e 0%,#072c62 62%,#061632 100%);border-top:1px solid #513af1}
+.speakers-cta-inner{display:flex;align-items:center;justify-content:space-between;gap:30px}
+.speakers-cta h2{font-size:clamp(22px,2.7vw,35px);line-height:1.1;margin:0}
+.speakers-cta p{color:#c9d9f0;font-size:13px;margin:9px 0 0}
+.speakers-cta .button{min-height:47px;padding:0 28px;font-size:12px}
+.speakers-footer{background:#030c1c;border-top:1px solid #253a5c;color:#adbfdb}
+.speakers-footer-inner{min-height:82px;display:flex;align-items:center;justify-content:space-between;gap:18px}
+.speakers-footer-inner>a:first-child{color:white;font-size:17px;font-weight:900;letter-spacing:-.5px}
+.speakers-footer-inner span{font-size:9px;letter-spacing:3px}
+.speakers-footer-inner>a:last-child{display:inline-flex;align-items:center;gap:4px;color:#67dfff;font-size:10px;font-weight:900}
+@media(max-width:1000px){.speakers-nav{gap:15px}.speakers-lineup-photo{height:300px}.speakers-roster-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.speakers-roster-card:nth-child(4){border-left:0}.speakers-roster-card:nth-child(n+4){border-top:1px solid #3d84cd66}}
+@media(max-width:760px){.speakers-header-inner{min-height:65px}.speakers-brand{width:185px}.speakers-nav{display:none}.speakers-mobile-nav{display:block}.speakers-header-cta{margin-left:auto}.speakers-hero-inner{padding-top:92px}.speakers-hero-topline{font-size:9px}.speakers-lineup{grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.speakers-lineup-photo{height:230px}.speakers-lineup-photo:nth-child(even){transform:none}.speakers-hero-title{margin-top:18px}.speakers-hero-title h1{font-size:clamp(65px,12vw,95px)}.speakers-roster-heading{align-items:start;flex-direction:column}.speakers-footer-inner span{display:none}}
+@media(max-width:540px){.speakers-header-cta{display:none}.speakers-hero-inner{padding-top:89px;padding-bottom:50px}.speakers-hero-topline{flex-direction:column;gap:3px;letter-spacing:1.5px}.speakers-hero-kicker{letter-spacing:2.2px;font-size:9px;margin:27px 0 17px}.speakers-lineup{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.speakers-lineup-photo{height:205px}.speakers-hero-title>span{letter-spacing:7px;font-size:10px}.speakers-hero-title h1{font-size:clamp(53px,13.7vw,76px);letter-spacing:-4px}.speakers-hero-title p{font-size:8px;letter-spacing:2.1px;margin-top:13px}.speakers-roster{padding:54px 0 63px}.speakers-roster-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.speakers-roster-card:nth-child(4){border-left:1px solid #3d84cd66}.speakers-roster-card:nth-child(odd){border-left:0}.speakers-roster-card:nth-child(n+3){border-top:1px solid #3d84cd66}.speakers-card-number{margin-bottom:22px}.speakers-roster-card h3{font-size:13px}.speakers-card-role{font-size:9px}.speakers-card-talk p{font-size:11px}.speakers-cta-inner{align-items:start;flex-direction:column}.speakers-footer-inner{min-height:70px}}
+@media(prefers-reduced-motion:reduce){.speakers-nav a{transition:none}}
