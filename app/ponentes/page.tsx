@@ -1,23 +1,15 @@
 import type { Metadata } from "next"
 import Image from "next/image"
 import Link from "next/link"
-import { ArrowRight, CalendarDays, Facebook, Instagram, Linkedin, MapPin, Menu, Users, Youtube } from "lucide-react"
+import { ArrowRight, CalendarDays, Facebook, Instagram, Linkedin, MapPin, Users, Youtube } from "lucide-react"
 import { speakers } from "../speakers"
+import { SiteHeader } from "../site-header"
 import "./ponentes.css"
 
 export const metadata: Metadata = {
   title: "Ponentes | XII FULLDAY",
   description: "Conoce a los ponentes del XII FULLDAY y las ideas que compartirán sobre tecnología, gestión de TI e ingeniería de sistemas.",
 }
-
-const navigation = [
-  { label: "Inicio", href: "/" },
-  { label: "Ponentes", href: "/ponentes" },
-  { label: "Temario", href: "/#temario" },
-  { label: "Beneficios", href: "/#beneficios" },
-  { label: "Lugar", href: "/#lugar" },
-  { label: "FAQ", href: "/?faq=1" },
-]
 
 function EventDetails({ compact = false }: { compact?: boolean }) {
   return <div className={compact ? "ps-event-details ps-event-details--compact" : "ps-event-details"}>
@@ -28,20 +20,9 @@ function EventDetails({ compact = false }: { compact?: boolean }) {
 }
 
 export default function PonentesPage() {
-  return <main className="ps-page">
-    <header className="ps-header">
-      <div className="ps-header-inner">
-        <Link className="ps-navbar-logo" href="/" aria-label="XII FULLDAY, ir al inicio">
-          <Image src="/images/event/logo-navbar.png" alt="XII FULLDAY, Gestión de TI e Ingeniería de Sistemas" width={2170} height={725} priority />
-        </Link>
-        <nav className="ps-nav" aria-label="Navegación principal">
-          {navigation.map(item => <Link key={item.label} href={item.href} aria-current={item.href === "/ponentes" ? "page" : undefined}>{item.label}</Link>)}
-        </nav>
-        <Link href="/#entradas" className="ps-button ps-button--gradient ps-header-register">REGÍSTRATE AHORA</Link>
-        <details className="ps-mobile-nav"><summary aria-label="Abrir menú"><Menu size={22} /></summary><nav aria-label="Navegación móvil">{navigation.map(item => <Link key={item.label} href={item.href}>{item.label}</Link>)}<Link href="/#entradas">Regístrate ahora</Link></nav></details>
-      </div>
-    </header>
-
+  return <>
+    <SiteHeader page="speakers" />
+    <main className="ps-page">
     <section className="ps-hero" aria-labelledby="ps-title">
       <Image className="ps-hero-photo" src="/images/event/ponentes-hero-branded.png" alt="" width={1672} height={941} priority sizes="100vw" />
       <Image className="ps-hero-photo-mobile" src="/images/event/ponentes-hero-mobile.png" alt="" width={1024} height={1536} sizes="(max-width: 520px) 100vw, 1px" />
@@ -60,5 +41,6 @@ export default function PonentesPage() {
     <section className="ps-cta" aria-labelledby="ps-cta-title"><div className="ps-content-width ps-cta-inner"><h2 id="ps-cta-title">ASEGURA TU ENTRADA</h2><p>SÉ PARTE DE XII FULLDAY</p><EventDetails /><Link className="ps-button ps-button--gradient ps-cta-register" href="/#entradas">REGÍSTRATE AHORA <ArrowRight size={18} /></Link></div></section>
 
     <footer className="ps-footer"><div className="ps-footer-inner"><Link className="ps-footer-brand" href="/" aria-label="XII FULLDAY, ir al inicio"><Image src="/images/event/logo-mark.png" alt="" width={44} height={44} /><span><strong>XII FULLDAY</strong><small>GESTIÓN DE TI | INGENIERÍA DE SISTEMAS</small></span></Link><nav aria-label="Navegación del pie de página"><Link href="/">Inicio</Link><Link href="/ponentes">Ponentes</Link><Link href="/#temario">Temario</Link><Link href="/#lugar">Lugar</Link><Link href="/?faq=1">FAQ</Link><a href="mailto:contacto@fullday.pe">Contacto</a></nav><div className="ps-socials"><a href="https://www.linkedin.com/" aria-label="LinkedIn"><Linkedin /></a><a href="https://www.instagram.com/" aria-label="Instagram"><Instagram /></a><a href="https://www.facebook.com/" aria-label="Facebook"><Facebook /></a><a href="https://www.youtube.com/" aria-label="YouTube"><Youtube /></a></div><small className="ps-copyright">© 2024 XII FULLDAY.<br />Todos los derechos reservados.</small><strong className="ps-footer-tagline">TECNOLOGÍA<br />TALENTO<br />IMPACTO REAL</strong></div></footer>
-  </main>
+    </main>
+  </>
 }

@@ -2,16 +2,15 @@
 
 import { useEffect, useState, useSyncExternalStore, type CSSProperties } from "react"
 import Image from "next/image"
-import { ArrowRight, BarChart3, CalendarDays, Check, Clock3, Cloud, Crown, GraduationCap, MapPin, Menu, Network, Palette, Play, Rocket, Settings, ShieldCheck, Ticket, Users, X } from "lucide-react"
+import { ArrowRight, BarChart3, CalendarDays, Check, Clock3, Cloud, Crown, GraduationCap, MapPin, Network, Palette, Play, Rocket, Settings, ShieldCheck, Ticket, Users, X } from "lucide-react"
 import { speakers } from "./speakers"
+import { Brand, SiteHeader } from "./site-header"
 
 // Inicio del evento en hora de Lima: el contador y la fecha del hero se calculan desde aquí.
 const EVENT_START = new Date("2026-11-21T09:00:00-05:00")
 const eventDate = (options: Intl.DateTimeFormatOptions) => EVENT_START.toLocaleDateString("es-PE", { timeZone: "America/Lima", ...options })
 const eventWeekday = eventDate({ weekday: "long" }).replace(/^./, letter => letter.toUpperCase())
 const eventYear = eventDate({ year: "numeric" })
-
-const navLinks = [["inicio", "Inicio"], ["ponentes", "Ponentes"], ["temario", "Temario"], ["beneficios", "Beneficios"], ["lugar", "Lugar"]]
 
 const benefits = [
   { title: "Conocimiento", detail: "práctico y actualizado", icon: GraduationCap },
@@ -40,19 +39,6 @@ const reasons = ["Aprende de expertos de la industria", "Conoce las últimas ten
 
 const stagger = (index: number, step = 90) => ({ "--reveal-delay": `${index * step}ms` }) as CSSProperties
 
-function subscribeToScroll(onChange: () => void) {
-  window.addEventListener("scroll", onChange, { passive: true })
-  window.addEventListener("resize", onChange)
-  return () => { window.removeEventListener("scroll", onChange); window.removeEventListener("resize", onChange) }
-}
-
-function getActiveSection() {
-  const sections = Array.from(document.querySelectorAll<HTMLElement>("main > section[id]"))
-  const atBottom = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2
-  const reached = atBottom ? sections : sections.filter(section => section.getBoundingClientRect().top <= window.innerHeight * .4)
-  return reached[reached.length - 1]?.id ?? "inicio"
-}
-
 function subscribeToClock(onTick: () => void) {
   let timer = 0
   const schedule = () => { timer = window.setTimeout(() => { onTick(); schedule() }, 1000 - Date.now() % 1000) }
@@ -61,31 +47,6 @@ function subscribeToClock(onTick: () => void) {
 }
 
 const currentSecond = (): number | null => Math.floor(Date.now() / 1000)
-
-function Brand({ dark = false }: { dark?: boolean }) {
-  if (!dark) return <a className="brand brand--image" href="#inicio" aria-label="XII Fullday, ir al inicio">
-    <Image src="/images/event/logo-navbar.png" alt="XII FULLDAY, Gestión de TI e Ingeniería de Sistemas" width={2170} height={725} className="navbar-logo" priority />
-  </a>
-  return <a className={`brand ${dark ? "brand--dark" : ""}`} href="#inicio" aria-label="XII Fullday, ir al inicio">
-    <Image src="/images/event/logo-mark.png" alt="" width={48} height={48} className="brand-mark" />
-    <span className="brand-words"><strong>XII FULLDAY</strong><small>GESTIÓN DE TI | INGENIERÍA DE SISTEMAS</small></span>
-  </a>
-}
-
-function SiteHeader({ onFaq }: { onFaq: () => void }) {
-  const [menuOpen, setMenuOpen] = useState(false)
-  const scrolled = useSyncExternalStore(subscribeToScroll, () => window.scrollY > 24, () => false)
-  const active = useSyncExternalStore(subscribeToScroll, getActiveSection, () => "inicio")
-
-  return <header className={scrolled || menuOpen ? "site-header site-header--scrolled" : "site-header"}><div className="page-width site-header-inner">
-    <Brand />
-    <nav className={menuOpen ? "nav-links nav-links--open" : "nav-links"} aria-label="Navegación principal">
-      {navLinks.map(([id, label]) => <a key={id} href={id === "ponentes" ? "/ponentes" : `#${id}`} className={active === id ? "is-active" : undefined} aria-current={active === id ? "true" : undefined} onClick={() => setMenuOpen(false)}>{label}</a>)}<button type="button" onClick={() => { onFaq(); setMenuOpen(false) }}>FAQ</button>
-    </nav>
-    <a className="button button--gradient header-cta" href="#entradas">REGÍSTRATE AHORA</a>
-    <button type="button" className="menu-toggle" aria-label={menuOpen ? "Cerrar menú" : "Abrir menú"} aria-expanded={menuOpen} onClick={() => setMenuOpen(!menuOpen)}>{menuOpen ? <X /> : <Menu />}</button>
-  </div></header>
-}
 
 function Countdown() {
   const now = useSyncExternalStore(subscribeToClock, currentSecond, () => null)
@@ -104,7 +65,9 @@ export default function Landing() {
   const openTicket = (name: string) => { setSelectedPlan(name); setModal("ticket") }
 
   useEffect(() => {
-    if (new URLSearchParams(window.location.search).get("faq") === "1") setModal("faq")
+    if (new URLSearchParams(window.location.search).get("faq") !== "1") return
+    const timer = window.setTimeout(() => setModal("faq"), 0)
+    return () => window.clearTimeout(timer)
   }, [])
 
   useEffect(() => {
@@ -118,7 +81,7 @@ export default function Landing() {
   }, [])
 
   return <>
-    <SiteHeader onFaq={() => setModal("faq")} />
+    <SiteHeader page="home" onFaq={() => setModal("faq")} />
     <main>
       <noscript><style>{"[data-reveal]{opacity:1!important}"}</style></noscript>
       <section className="hero" id="inicio" aria-label="XII Fullday">
