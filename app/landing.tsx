@@ -59,6 +59,11 @@ function Countdown() {
   })}</div></div>
 }
 
+function HeroPhoto() {
+  const [loaded, setLoaded] = useState(false)
+  return <div className={loaded ? "hero-photo hero-photo--loaded" : "hero-photo"}><Image src="/images/event/hero-stage-logo.png" alt="" width={1672} height={941} preload className="hero-photo-img" onLoad={() => setLoaded(true)} /></div>
+}
+
 export default function Landing() {
   const [modal, setModal] = useState<"video" | "faq" | "ticket" | null>(null)
   const [selectedPlan, setSelectedPlan] = useState("PROFESIONAL")
@@ -83,9 +88,9 @@ export default function Landing() {
   return <>
     <SiteHeader page="home" onFaq={() => setModal("faq")} />
     <main>
-      <noscript><style>{"[data-reveal]{opacity:1!important}"}</style></noscript>
+      <noscript><style>{"[data-reveal],.hero-photo-img{opacity:1!important}"}</style></noscript>
       <section className="hero" id="inicio" aria-label="XII Fullday">
-        <div className="hero-photo" />
+        <HeroPhoto />
         <div className="hero-content page-width"><div className="hero-copy">
           <Image src="/images/event/logo-horizontal.png" alt="XII Fullday, Gestión de TI e Ingeniería de Sistemas" width={500} height={183} className="hero-logo" priority />
           <p className="hero-kicker">TECNOLOGÍA <span>·</span> TALENTO <span>·</span> IMPACTO REAL</p>
