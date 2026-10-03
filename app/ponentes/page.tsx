@@ -30,7 +30,7 @@ export default function PonentesPage() {
       <div className="ps-mini-speakers" aria-label="Los seis ponentes del XII FULLDAY">
         {speakers.map(speaker => <div className="ps-mini-speaker" key={speaker.name}><h2>{speaker.name}</h2><p>{speaker.role}<br /><strong>{speaker.company}</strong></p><span>{speaker.talk}</span></div>)}
       </div>
-      <div className="ps-hero-bottom"><EventDetails compact /><Link className="ps-button ps-button--gradient ps-hero-register" href="/#entradas">REGÍSTRATE AHORA <ArrowRight size={17} /></Link></div>
+      <div className="ps-hero-bottom"><EventDetails compact /><Link className="ps-button ps-button--gradient ps-hero-register" href="/#entradas">REGÍSTRATE GRATIS <ArrowRight size={17} /></Link></div>
     </section>
 
     <section className="ps-speakers" aria-labelledby="ps-speakers-title"><div className="ps-content-width">
@@ -38,7 +38,7 @@ export default function PonentesPage() {
       <div className="ps-speaker-grid">{speakers.map(speaker => <article className="ps-speaker-card" key={speaker.name}><div className="ps-card-photo"><Image src={speaker.image} alt={`Retrato de ${speaker.name}`} fill sizes="(max-width: 600px) 90vw, (max-width: 800px) 45vw, 30vw" loading="eager" /></div><div className="ps-card-info"><h3>{speaker.name}</h3><p>{speaker.role}</p><strong>{speaker.company}</strong><div className="ps-card-talk">{speaker.talk}</div></div></article>)}</div>
     </div></section>
 
-    <section className="ps-cta" aria-labelledby="ps-cta-title"><div className="ps-content-width ps-cta-inner"><h2 id="ps-cta-title">ASEGURA TU ENTRADA</h2><p>SÉ PARTE DE XII FULLDAY</p><EventDetails /><Link className="ps-button ps-button--gradient ps-cta-register" href="/#entradas">REGÍSTRATE AHORA <ArrowRight size={18} /></Link></div></section>
+    <section className="ps-cta" aria-labelledby="ps-cta-title"><div className="ps-content-width ps-cta-inner"><h2 id="ps-cta-title">ASEGURA TU LUGAR</h2><p>ENTRADA LIBRE · SÉ PARTE DE XII FULLDAY</p><EventDetails /><Link className="ps-button ps-button--gradient ps-cta-register" href="/#entradas">REGÍSTRATE GRATIS <ArrowRight size={18} /></Link></div></section>
 
     <footer className="ps-footer"><div className="ps-footer-inner"><Link className="ps-footer-brand" href="/" aria-label="XII FULLDAY, ir al inicio"><Image src="/images/event/logo-mark.png" alt="" width={44} height={44} /><span><strong>XII FULLDAY</strong><small>GESTIÓN DE TI | INGENIERÍA DE SISTEMAS</small></span></Link><nav aria-label="Navegación del pie de página"><Link href="/">Inicio</Link><Link href="/ponentes">Ponentes</Link><Link href="/#temario">Temario</Link><Link href="/#lugar">Lugar</Link><Link href="/?faq=1">FAQ</Link><a href="mailto:contacto@fullday.pe">Contacto</a></nav><div className="ps-socials"><a href="https://www.linkedin.com/" aria-label="LinkedIn"><Linkedin /></a><a href="https://www.instagram.com/" aria-label="Instagram"><Instagram /></a><a href="https://www.facebook.com/" aria-label="Facebook"><Facebook /></a><a href="https://www.youtube.com/" aria-label="YouTube"><Youtube /></a></div><small className="ps-copyright">© 2024 XII FULLDAY.<br />Todos los derechos reservados.</small><strong className="ps-footer-tagline">TECNOLOGÍA<br />TALENTO<br />IMPACTO REAL</strong></div></footer>
     </main>

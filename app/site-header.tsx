@@ -47,7 +47,7 @@ export function SiteHeader({ page, onFaq }: { page: "home" | "speakers"; onFaq?:
       })}
       {isHome ? <button type="button" onClick={() => { onFaq?.(); setMenuOpen(false) }}>FAQ</button> : <Link href="/?faq=1" onClick={() => setMenuOpen(false)}>FAQ</Link>}
     </nav>
-    <a className="button button--gradient header-cta" href={isHome ? "#entradas" : "/#entradas"}>REGÍSTRATE AHORA</a>
+    <a className="button button--gradient header-cta" href={isHome ? "#entradas" : "/#entradas"}>REGÍSTRATE GRATIS</a>
     <button type="button" className="menu-toggle" aria-label={menuOpen ? "Cerrar menú" : "Abrir menú"} aria-expanded={menuOpen} onClick={() => setMenuOpen(!menuOpen)}>{menuOpen ? <X /> : <Menu />}</button>
   </div></header>
 }
