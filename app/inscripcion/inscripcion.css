@@ -180,8 +180,8 @@
 }
 .registration-form-card {
   width: 100%;
-  min-height: 580px;
-  padding: clamp(28px, 4vw, 48px);
+  min-height: 0;
+  padding: clamp(24px, 3vw, 34px);
   border: 1px solid #277fe5;
   border-radius: 12px;
   background: linear-gradient(135deg, #0b2450e8, #061936ee);
@@ -194,7 +194,7 @@
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 12px;
-  margin: 0 0 52px;
+  margin: 0 0 27px;
   padding: 0;
   list-style: none;
   counter-reset: steps;
@@ -242,42 +242,183 @@
 .registration-form-intro {
   max-width: 440px;
 }
-.registration-card-kicker {
-  font-size: 9px;
-  opacity: 0.9;
-}
 .registration-form-intro h2 {
-  margin: 17px 0 8px;
-  font-size: clamp(24px, 2.3vw, 34px);
+  margin: 0 0 5px;
+  font-size: clamp(20px, 1.85vw, 27px);
   letter-spacing: -0.8px;
 }
 .registration-form-intro p {
   margin: 0;
   color: #c0cde5;
-  font-size: 14px;
+  font-size: 12px;
   line-height: 1.45;
 }
-.registration-form-placeholder {
+.registration-form {
+  margin-top: 18px;
+}
+.registration-fields {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 15px;
-  margin-top: 45px;
+  gap: 9px 14px;
 }
-.registration-form-placeholder i {
-  display: block;
-  height: 48px;
-  border: 1px dashed #4574a0;
-  border-radius: 7px;
-  background: #071a39a8;
+.registration-fields label {
+  display: grid;
+  gap: 4px;
+  color: #f0f4ff;
+  font-size: 11px;
+  font-weight: 700;
 }
-.registration-form-placeholder i:nth-last-child(2) {
-  grid-column: 1/-1;
+.registration-label {
+  display: inline-block;
+  white-space: nowrap;
 }
-.registration-form-placeholder i:last-child {
-  width: 48%;
-  height: 46px;
-  background: linear-gradient(100deg, #9727ee, #078ef7);
+.registration-label b {
+  color: #e582ff;
+}
+.registration-label em {
+  color: #aebedc;
+  font-style: normal;
+  font-weight: 400;
+}
+.registration-field-wide {
+  grid-column: 1 / -1;
+}
+.registration-control {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  height: 39px;
+  border: 1px solid #385d91;
+  border-radius: 6px;
+  background: #081a38c9;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s;
+}
+.registration-control:focus-within {
+  border-color: #48bffb;
+  box-shadow: 0 0 0 3px #1c9dff22;
+}
+.registration-control.is-invalid {
+  border-color: #ee5b74;
+  box-shadow: 0 0 0 3px #e4476230;
+}
+.registration-control svg {
+  width: 17px;
+  margin-left: 12px;
+  flex: none;
+  color: #93b9e8;
+}
+.registration-control input,
+.registration-control select {
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  padding: 0 11px;
   border: 0;
+  outline: 0;
+  appearance: none;
+  background: transparent;
+  color: #f6f9ff;
+  font: inherit;
+  font-size: 11px;
+}
+.registration-control input::placeholder {
+  color: #8fa3c4;
+}
+.registration-control select {
+  padding-right: 33px;
+  cursor: pointer;
+  background:
+    linear-gradient(45deg, transparent 50%, #8faed4 50%) calc(100% - 16px)
+      18px / 5px 5px no-repeat,
+    linear-gradient(135deg, #8faed4 50%, transparent 50%) calc(100% - 11px)
+      18px / 5px 5px no-repeat;
+}
+.registration-control option {
+  background: #0c244b;
+  color: #fff;
+}
+.registration-consent {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  margin-top: 14px;
+  color: #dbe6fb;
+  font-size: 10px;
+  line-height: 1.4;
+  cursor: pointer;
+}
+.registration-consent input {
+  width: 17px;
+  height: 17px;
+  flex: none;
+  margin: -1px 0 0;
+  accent-color: #ad2cf5;
+  cursor: pointer;
+}
+.registration-consent.is-invalid {
+  color: #ffd6dd;
+}
+.registration-consent.is-invalid input {
+  outline: 1px solid #ee5b74;
+  outline-offset: 2px;
+}
+.registration-submit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  height: 43px;
+  margin-top: 14px;
+  border: 0;
+  border-radius: 7px;
+  background: linear-gradient(100deg, #b221f1, #7735ec 46%, #078efb);
+  box-shadow: 0 8px 22px #5e20db6b;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.4px;
+  transition:
+    transform 0.2s,
+    box-shadow 0.2s;
+}
+.registration-submit:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 11px 26px #5e20db95;
+}
+.registration-privacy {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  margin: 12px 0 0;
+  color: #aabbd9;
+  font-size: 9px;
+  line-height: 1.35;
+  text-align: center;
+}
+.registration-privacy svg {
+  width: 13px;
+  flex: none;
+  color: #9fb7de;
+}
+.registration-toast {
+  position: fixed;
+  z-index: 100;
+  right: 24px;
+  bottom: 24px;
+  max-width: min(360px, calc(100vw - 48px));
+  padding: 13px 17px;
+  border: 1px solid #ef697e;
+  border-radius: 8px;
+  background: #351829f2;
+  box-shadow: 0 14px 35px #010614a8;
+  color: #fff2f4;
+  font-size: 12px;
+  font-weight: 700;
 }
 @media (max-width: 800px) {
   .registration-main {
@@ -297,16 +438,13 @@
     max-width: 570px;
   }
   .registration-form-card {
-    min-height: 500px;
+    min-height: 0;
   }
   .registration-heading {
     margin-bottom: 27px;
   }
   .registration-details {
     max-width: 570px;
-  }
-  .registration-form-placeholder {
-    margin-top: 35px;
   }
 }
 @media (max-width: 560px) {
@@ -340,7 +478,7 @@
     grid-column: 1/-1;
   }
   .registration-form-card {
-    min-height: 450px;
+    min-height: 0;
     padding: 25px 20px;
     border-radius: 10px;
   }
@@ -358,11 +496,19 @@
   .registration-form-intro p {
     font-size: 13px;
   }
-  .registration-form-placeholder {
-    gap: 10px;
+  .registration-fields {
+    grid-template-columns: 1fr;
+    gap: 13px;
   }
-  .registration-form-placeholder i {
-    height: 43px;
+  .registration-field-wide {
+    grid-column: auto;
+  }
+  .registration-privacy {
+    font-size: 8.5px;
+  }
+  .registration-toast {
+    right: 16px;
+    bottom: 16px;
   }
 }
 @media (prefers-reduced-motion: reduce) {

@@ -2,6 +2,7 @@ import type { Metadata } from "next"
 import Image from "next/image"
 import { BriefcaseBusiness, CalendarDays, MapPin, Network, UsersRound } from "lucide-react"
 import { SiteHeader } from "../site-header"
+import { RegistrationForm } from "./registration-form"
 import "./inscripcion.css"
 
 export const metadata: Metadata = {
@@ -14,6 +15,12 @@ const benefits = [
   { icon: Network, title: "Networking con profesionales", detail: "Conecta con empresas y talentos" },
   { icon: BriefcaseBusiness, title: "Casos reales de la industria", detail: "Experiencia y tendencias actuales" },
 ]
+
+// Opciones: sustituir estas listas por los valores reales (o por valores obtenidos del backend) cuando estén definidos.
+const institutions = ["Universidad Nacional de Trujillo", "Universidad Privada Antenor Orrego", "Universidad César Vallejo", "TECSUP Trujillo"]
+const programs = ["Ingeniería de Sistemas", "Ingeniería de Software", "Ciencia de Datos", "Computación e Informática", "Tecnologías de la Información"]
+const academicYears = ["I - II ciclo", "III - IV ciclo", "V - VI ciclo", "VII - VIII ciclo", "IX - X ciclo", "Egresado(a)"]
+const cities = ["Trujillo", "Víctor Larco Herrera", "Huanchaco", "La Esperanza", "Chepén", "Otra ciudad"]
 
 export default function InscripcionPage() {
   return <div className="registration-page">
@@ -47,7 +54,7 @@ export default function InscripcionPage() {
             <h2 id="form-title">Datos personales</h2>
             <p>Completa la siguiente información para tu inscripción.</p>
           </div>
-          <div className="registration-form-placeholder" aria-hidden="true"><i /><i /><i /><i /><i /><i /></div>
+          <RegistrationForm institutions={institutions} programs={programs} academicYears={academicYears} cities={cities} />
         </section>
       </div>
     </main>
