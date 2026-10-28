@@ -105,7 +105,7 @@ export default function Landing() {
           <p className="hero-kicker">TECNOLOGÍA <span>·</span> TALENTO <span>·</span> IMPACTO REAL</p>
           <p className="hero-description">El evento académico y profesional más importante<br className="desktop-break" /> de Gestión de TI e Ingeniería de Sistemas.<br className="desktop-break" /> Conecta, aprende y sé parte del cambio.</p>
           <div className="event-details"><div><CalendarDays /><span>{eventWeekday}<br />{eventDate({ day: "numeric", month: "long" })} {eventYear}</span></div><div><MapPin /><span>Centro de Convenciones<br />Lima, Perú</span></div><div><Users /><span>+500<br />Asistentes</span></div></div>
-          <div className="hero-actions"><a className="button button--gradient button--large" href="#entradas">REGÍSTRATE GRATIS <ArrowRight size={17} /></a><button type="button" className="button button--outline button--large" onClick={() => setModal("video")}><span className="play-dot"><Play size={10} fill="currentColor" /></span> VER VIDEO</button></div>
+          <div className="hero-actions"><a className="button button--gradient button--large" href="/inscripcion">REGÍSTRATE GRATIS <ArrowRight size={17} /></a><button type="button" className="button button--outline button--large" onClick={() => setModal("video")}><span className="play-dot"><Play size={10} fill="currentColor" /></span> VER VIDEO</button></div>
         </div></div>
         <Countdown />
       </section>

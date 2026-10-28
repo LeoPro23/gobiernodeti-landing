@@ -31,7 +31,7 @@ export function Brand({ dark = false, home = true }: { dark?: boolean; home?: bo
   </a>
 }
 
-export function SiteHeader({ page, onFaq }: { page: "home" | "speakers"; onFaq?: () => void }) {
+export function SiteHeader({ page, onFaq }: { page: "home" | "speakers" | "registration"; onFaq?: () => void }) {
   const [menuOpen, setMenuOpen] = useState(false)
   const scrolled = useSyncExternalStore(subscribeToScroll, () => window.scrollY > 24, () => false)
   const active = useSyncExternalStore(subscribeToScroll, getActiveSection, () => "inicio")
@@ -47,7 +47,7 @@ export function SiteHeader({ page, onFaq }: { page: "home" | "speakers"; onFaq?:
       })}
       {isHome ? <button type="button" onClick={() => { onFaq?.(); setMenuOpen(false) }}>FAQ</button> : <Link href="/?faq=1" onClick={() => setMenuOpen(false)}>FAQ</Link>}
     </nav>
-    <a className="button button--gradient header-cta" href={isHome ? "#entradas" : "/#entradas"}>REGÍSTRATE GRATIS</a>
+    <a className="button button--gradient header-cta" href="/inscripcion">REGÍSTRATE GRATIS</a>
     <button type="button" className="menu-toggle" aria-label={menuOpen ? "Cerrar menú" : "Abrir menú"} aria-expanded={menuOpen} onClick={() => setMenuOpen(!menuOpen)}>{menuOpen ? <X /> : <Menu />}</button>
   </div></header>
 }
