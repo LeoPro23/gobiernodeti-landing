@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useSyncExternalStore, type CSSProperties } from "react"
 import Image from "next/image"
+import Link from "next/link"
 import { ArrowRight, Award, BarChart3, CalendarDays, Check, Clock3, Cloud, GraduationCap, MapPin, Palette, Play, Rocket, Settings, ShieldCheck, Ticket, Users, X } from "lucide-react"
 import { speakers } from "./speakers"
 import { Brand, SiteHeader } from "./site-header"
@@ -74,9 +75,7 @@ function HeroPhoto() {
 }
 
 export default function Landing() {
-  const [modal, setModal] = useState<"video" | "faq" | "register" | null>(null)
-  const [wantsCertificate, setWantsCertificate] = useState(false)
-  const openRegister = (certificate: boolean) => { setWantsCertificate(certificate); setModal("register") }
+  const [modal, setModal] = useState<"video" | "faq" | null>(null)
 
   useEffect(() => {
     if (new URLSearchParams(window.location.search).get("faq") !== "1") return
@@ -98,14 +97,15 @@ export default function Landing() {
     <SiteHeader page="home" onFaq={() => setModal("faq")} />
     <main>
       <noscript><style>{"[data-reveal],.hero-photo-img{opacity:1!important}"}</style></noscript>
+
       <section className="hero" id="inicio" aria-label="XII Fullday">
         <HeroPhoto />
         <div className="hero-content page-width"><div className="hero-copy">
-          <Image src="/images/event/logo-horizontal.png" alt="XII Fullday, Gestión de TI e Ingeniería de Sistemas" width={500} height={183} className="hero-logo" priority />
+          <Image src="/images/event/logo-horizontal.png" alt="XII FULLDAY, Gestión de TI e Ingeniería de Sistemas" width={500} height={183} className="hero-logo" priority />
           <p className="hero-kicker">TECNOLOGÍA <span>·</span> TALENTO <span>·</span> IMPACTO REAL</p>
           <p className="hero-description">El evento académico y profesional más importante<br className="desktop-break" /> de Gestión de TI e Ingeniería de Sistemas.<br className="desktop-break" /> Conecta, aprende y sé parte del cambio.</p>
           <div className="event-details"><div><CalendarDays /><span>{eventWeekday}<br />{eventDate({ day: "numeric", month: "long" })} {eventYear}</span></div><div><MapPin /><span>Centro de Convenciones<br />Lima, Perú</span></div><div><Users /><span>+500<br />Asistentes</span></div></div>
-          <div className="hero-actions"><a className="button button--gradient button--large" href="#entradas">REGÍSTRATE GRATIS <ArrowRight size={17} /></a><button type="button" className="button button--outline button--large" onClick={() => setModal("video")}><span className="play-dot"><Play size={10} fill="currentColor" /></span> VER VIDEO</button></div>
+          <div className="hero-actions"><Link className="button button--gradient button--large" href="/registro">REGÍSTRATE GRATIS <ArrowRight size={17} /></Link><button type="button" className="button button--outline button--large" onClick={() => setModal("video")}><span className="play-dot"><Play size={10} fill="currentColor" /></span> VER VIDEO</button></div>
         </div></div>
         <Countdown />
       </section>
@@ -126,15 +126,15 @@ export default function Landing() {
 
       <section className="section tickets-section" id="entradas"><div className="page-width tickets-layout">
         <div className="tickets-title" data-reveal><span className="eyebrow">ENTRADAS</span><h2>ENTRADA LIBRE</h2><i /><p>El evento es gratuito: solo regístrate. El certificado es opcional.</p></div>
-        <div className="pricing-grid">{plans.map((plan, index) => <article className={`price-card ${plan.badge ? "price-card--popular" : ""}`} key={plan.name} data-reveal style={stagger(index, 120)}>{plan.badge && <span className="popular-label">{plan.badge}</span>}<h3><plan.icon size={20} /> {plan.name}</h3><Price value={plan.price} /><ul>{plan.features.map(feature => <li key={feature}><Check size={12} /> {feature}</li>)}</ul><button type="button" className={plan.badge ? "button button--gradient price-button" : "button button--outline price-button"} onClick={() => openRegister(plan.certificate)}>{plan.cta}</button></article>)}</div>
+        <div className="pricing-grid">{plans.map((plan, index) => <article className={`price-card ${plan.badge ? "price-card--popular" : ""}`} key={plan.name} data-reveal style={stagger(index, 120)}>{plan.badge && <span className="popular-label">{plan.badge}</span>}<h3><plan.icon size={20} /> {plan.name}</h3><Price value={plan.price} /><ul>{plan.features.map(feature => <li key={feature}><Check size={12} /> {feature}</li>)}</ul><Link href="/registro" className={plan.badge ? "button button--gradient price-button" : "button button--outline price-button"}>{plan.cta}</Link></article>)}</div>
         <div className="why-attend" data-reveal style={stagger(3, 120)}><h2>¿POR QUÉ ASISTIR?</h2><ul>{reasons.map((reason, index) => <li key={reason} style={stagger(index, 80)}><span><Check size={14} strokeWidth={3} /></span>{reason}</li>)}</ul></div>
       </div></section>
 
-      <section className="venue-section" id="lugar"><div className="page-width venue-grid"><div className="venue-copy" data-reveal="left"><span className="eyebrow">LUGAR</span><h2>CENTRO DE CONVENCIONES LIMA</h2><p><MapPin size={19} fill="currentColor" /> Av. Arequipa 1234, Lima, Perú</p></div><Image src="/images/event/venue.png" alt="Exterior iluminado del centro de convenciones al atardecer" width={400} height={200} className="venue-photo" data-reveal="zoom" style={stagger(1, 120)} /><div className="last-call" data-reveal="right" style={stagger(2, 120)}><Ticket /><div><h3>LOS CUPOS SON LIMITADOS</h3><p>La entrada es libre. Sé parte del XII FULLDAY y vive una experiencia que potenciará tu futuro profesional.</p><a className="button button--gradient" href="#entradas">REGÍSTRATE GRATIS <ArrowRight size={16} /></a></div></div></div></section>
+      <section className="venue-section" id="lugar"><div className="page-width venue-grid"><div className="venue-copy" data-reveal="left"><span className="eyebrow">LUGAR</span><h2>CENTRO DE CONVENCIONES LIMA</h2><p><MapPin size={19} fill="currentColor" /> Av. Arequipa 1234, Lima, Perú</p></div><Image src="/images/event/venue.png" alt="Exterior iluminado del centro de convenciones al atardecer" width={400} height={200} className="venue-photo" data-reveal="zoom" style={stagger(1, 120)} /><div className="last-call" data-reveal="right" style={stagger(2, 120)}><Ticket /><div><h3>LOS CUPOS SON LIMITADOS</h3><p>La entrada es libre. Sé parte del XII FULLDAY y vive una experiencia que potenciará tu futuro profesional.</p><Link className="button button--gradient" href="/registro">REGÍSTRATE GRATIS <ArrowRight size={16} /></Link></div></div></div></section>
 
       <footer className="footer"><div className="page-width footer-inner"><Brand dark /><nav aria-label="Navegación del pie de página"><a href="#inicio">Inicio</a><a href="/ponentes">Ponentes</a><a href="#temario">Temario</a><a href="#lugar">Lugar</a><button type="button" onClick={() => setModal("faq")}>FAQ</button><a href="mailto:contacto@fullday.pe">Contacto</a></nav><div className="socials"><a href="https://www.linkedin.com/" aria-label="LinkedIn">in</a><a href="https://www.instagram.com/" aria-label="Instagram">◎</a><a href="https://www.facebook.com/" aria-label="Facebook">f</a><a href="https://www.youtube.com/" aria-label="YouTube">▶</a></div><small>© {eventYear} XII FULLDAY.<br />Todos los derechos reservados.</small></div></footer>
 
-      {modal && <div className="modal-backdrop" onMouseDown={() => setModal(null)}><div className="modal" role="dialog" aria-modal="true" aria-label={modal === "video" ? "Video del evento" : modal === "faq" ? "Preguntas frecuentes" : "Registro gratuito"} onMouseDown={event => event.stopPropagation()}><button className="modal-close" type="button" aria-label="Cerrar" onClick={() => setModal(null)}><X /></button>{modal === "video" ? <><h2>VIVE EL XII FULLDAY</h2><div className="video-preview"><Image src="/images/event/hero-stage-logo.png" alt="Auditorio del evento" fill sizes="(max-width: 600px) 90vw, 650px" /><Play size={46} fill="currentColor" /></div><p>Conecta con los profesionales que están transformando la tecnología.</p></> : modal === "faq" ? <><h2>PREGUNTAS FRECUENTES</h2><details open><summary>¿El evento tiene costo?</summary><p>No. La entrada es libre y gratuita; solo necesitas registrarte.</p></details><details><summary>¿Dónde se realiza el evento?</summary><p>En el Centro de Convenciones Lima, Av. Arequipa 1234, Lima, Perú.</p></details><details><summary>¿Cómo obtengo el certificado?</summary><p>El certificado de participación es opcional y tiene un costo ({certificatePrice}). Puedes solicitarlo al registrarte.</p></details><details><summary>¿A qué hora empieza?</summary><p>La primera sesión comienza a las 09:00.</p></details></> : <><h2>REGÍSTRATE GRATIS</h2><p>La entrada al XII FULLDAY es libre. Completa tus datos para asegurar tu lugar.</p><form action="mailto:contacto@fullday.pe" method="post" encType="text/plain"><label>Nombre completo<input name="nombre" required placeholder="Tu nombre" /></label><label>Correo electrónico<input name="correo" type="email" required placeholder="tu@correo.com" /></label><label className="checkbox-field"><input type="checkbox" name="certificado" value="sí" checked={wantsCertificate} onChange={event => setWantsCertificate(event.target.checked)} /><span>Quiero el certificado de participación<small>Opcional · {certificatePrice}. Te enviaremos los detalles por correo.</small></span></label><button className="button button--gradient" type="submit">CONFIRMAR REGISTRO <ArrowRight size={16} /></button></form></>}</div></div>}
+      {modal && <div className="modal-backdrop" onMouseDown={() => setModal(null)}><div className="modal" role="dialog" aria-modal="true" aria-label={modal === "video" ? "Video del evento" : "Preguntas frecuentes"} onMouseDown={event => event.stopPropagation()}><button className="modal-close" type="button" aria-label="Cerrar" onClick={() => setModal(null)}><X /></button>{modal === "video" ? <><h2>VIVE EL XII FULLDAY</h2><div className="video-preview"><Image src="/images/event/hero-stage-logo.png" alt="Auditorio del evento" fill sizes="(max-width: 600px) 90vw, 650px" /><Play size={46} fill="currentColor" /></div><p>Conecta con los profesionales que están transformando la tecnología.</p></> : <><h2>PREGUNTAS FRECUENTES</h2><details open><summary>¿El evento tiene costo?</summary><p>No. La entrada es libre y gratuita; solo necesitas registrarte.</p></details><details><summary>¿Dónde se realiza el evento?</summary><p>En el Centro de Convenciones Lima, Av. Arequipa 1234, Lima, Perú.</p></details><details><summary>¿Cómo obtengo el certificado?</summary><p>El certificado de participación es opcional y tiene un costo ({certificatePrice}). Puedes solicitarlo al registrarte.</p></details><details><summary>¿A qué hora empieza?</summary><p>La primera sesión comienza a las 09:00.</p></details></>}</div></div>}
     </main>
   </>
 }
