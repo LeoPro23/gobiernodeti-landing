@@ -9,6 +9,7 @@ import {
   Building2,
   Calendar,
   CalendarDays,
+  Clock3,
   Check,
   CheckCircle2,
   ChevronDown,
@@ -291,9 +292,9 @@ export default function RegistrationForm({ turnstileSiteKey }: { turnstileSiteKe
   // Abrir Google Calendar directamente en la web
   const openGoogleCalendar = () => {
     const title = encodeURIComponent("XII FULLDAY - Gestión de TI e Ingeniería de Sistemas")
-    const details = encodeURIComponent("¡Tu inscripción al XII FULLDAY está confirmada! Acompáñanos a una jornada llena de innovación, tecnología y networking.\n\nLugar: Centro de Convenciones, Lima, Perú.")
-    const location = encodeURIComponent("Centro de Convenciones, Lima, Perú")
-    const dates = "20261121T140000Z/20261121T230000Z" // 9:00 AM a 6:00 PM Lima (-5) = 14:00 a 23:00 UTC
+    const details = encodeURIComponent("¡Tu inscripción al XII FULLDAY está confirmada! Acompáñanos a una jornada llena de innovación, tecnología y networking.\n\nLugar: Auditorio de Humanidades UNT, Universidad Nacional de Trujillo.")
+    const location = encodeURIComponent("Auditorio de Humanidades UNT")
+    const dates = "20261121T130000Z/20261121T230000Z" // 8:00 a. m. a 6:00 p. m. en Perú (UTC-5).
     const url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${dates}&details=${details}&location=${location}`
     window.open(url, "_blank")
     setCalendarMenuOpen(false)
@@ -313,11 +314,11 @@ export default function RegistrationForm({ turnstileSiteKey }: { turnstileSiteKe
       "SEQUENCE:0",
       "STATUS:CONFIRMED",
       "DTSTAMP:20261028T000000Z",
-      "DTSTART:20261121T140000Z",
+      "DTSTART:20261121T130000Z",
       "DTEND:20261121T230000Z",
       "SUMMARY:XII FULLDAY - Gestión de TI e Ingeniería de Sistemas",
       "DESCRIPTION:El evento académico y profesional más importante de Gestión de TI e Ingeniería de Sistemas.",
-      "LOCATION:Centro de Convenciones, Lima, Perú",
+      "LOCATION:Auditorio de Humanidades UNT",
       "END:VEVENT",
       "END:VCALENDAR",
     ].join("\r\n")
@@ -394,17 +395,16 @@ export default function RegistrationForm({ turnstileSiteKey }: { turnstileSiteKe
                 </span>
               </div>
               <div className="reg-meta-item">
-                <MapPin size={18} />
+                <Clock3 size={18} />
                 <span>
-                  Centro de Convenciones<br />
-                  <strong>Lima, Perú</strong>
+                  <strong>8:00 a. m.</strong>
                 </span>
               </div>
               <div className="reg-meta-item">
-                <Users size={18} />
+                <MapPin size={18} />
                 <span>
-                  <strong>+500</strong><br />
-                  Asistentes
+                  Auditorio de<br />
+                  <strong>Humanidades UNT</strong>
                 </span>
               </div>
             </div>
@@ -822,7 +822,7 @@ export default function RegistrationForm({ turnstileSiteKey }: { turnstileSiteKe
                     <div className="reg-step-card">
                       <Users size={22} />
                       <strong>3. Nos vemos allí</strong>
-                      <p>Sábado 21 de noviembre de 2026 en Lima, Perú.</p>
+                      <p>Sábado 21 de noviembre de 2026, 8:00 a. m., en el Auditorio de Humanidades UNT.</p>
                     </div>
                   </div>
                 </div>

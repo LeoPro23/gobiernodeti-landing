@@ -1,7 +1,7 @@
 import type { Metadata } from "next"
 import Image from "next/image"
 import Link from "next/link"
-import { ArrowRight, CalendarDays, Facebook, Instagram, Linkedin, MapPin, Users, Youtube } from "lucide-react"
+import { ArrowRight, CalendarDays, Clock3, Facebook, Instagram, Linkedin, MapPin, Youtube } from "lucide-react"
 import { speakers } from "../speakers"
 import { SiteHeader } from "../site-header"
 import "./ponentes.css"
@@ -14,8 +14,8 @@ export const metadata: Metadata = {
 function EventDetails({ compact = false }: { compact?: boolean }) {
   return <div className={compact ? "ps-event-details ps-event-details--compact" : "ps-event-details"}>
     <div><CalendarDays aria-hidden="true" /><span>Sábado<br /><strong>21 de noviembre 2026</strong></span></div>
-    <div><MapPin aria-hidden="true" /><span>Centro de Convenciones<br /><strong>Lima, Perú</strong></span></div>
-    <div><Users aria-hidden="true" /><span><strong>+500</strong><br />Asistentes</span></div>
+    <div><Clock3 aria-hidden="true" /><span><strong>8:00 a. m.</strong></span></div>
+    <div><MapPin aria-hidden="true" /><span>Auditorio de<br /><strong>Humanidades UNT</strong></span></div>
   </div>
 }
 
