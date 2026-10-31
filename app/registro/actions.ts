@@ -1,6 +1,7 @@
 "use server"
 
 import { createRegistration, type RegistrationInput } from "@/lib/db"
+import { verifyTurnstileToken } from "@/lib/turnstile"
 
 export interface RegisterResult {
   success: boolean
@@ -13,7 +14,7 @@ export interface RegisterResult {
   }
 }
 
-export async function submitRegistration(payload: RegistrationInput): Promise<RegisterResult> {
+export async function submitRegistration(payload: RegistrationInput, turnstileToken: string): Promise<RegisterResult> {
   try {
     // Validaciones básicas de campos obligatorios
     if (!payload.nombres || !payload.apellidos || !payload.dni || !payload.universidad || !payload.carrera || !payload.ciclo) {
@@ -37,6 +38,9 @@ export async function submitRegistration(payload: RegistrationInput): Promise<Re
         error: "Debes aceptar los términos y condiciones del evento para continuar.",
       }
     }
+
+    const verification = await verifyTurnstileToken(turnstileToken)
+    if (!verification.success) return verification
 
     const result = await createRegistration(payload)
     return {

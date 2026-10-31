@@ -851,6 +851,30 @@
   flex-shrink: 0;
 }
 
+.reg-turnstile {
+  margin-bottom: 22px;
+  min-width: 0;
+}
+
+.reg-turnstile-widget {
+  min-height: 65px;
+}
+
+.reg-turnstile-error {
+  margin-top: 10px;
+  color: #fca5a5;
+  font-size: 13px;
+}
+
+.reg-turnstile-error p {
+  margin: 0 0 8px;
+}
+
+.reg-edit-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
 /* Responsive */
 @media (max-width: 950px) {
   .reg-layout {
