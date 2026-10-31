@@ -1,7 +1,7 @@
 import type { Metadata } from "next"
 import Image from "next/image"
 import Link from "next/link"
-import { ArrowRight, CalendarDays, Clock3, Facebook, Instagram, Linkedin, MapPin, Youtube } from "lucide-react"
+import { ArrowRight, CalendarDays, Clock3, Facebook, Instagram, Linkedin, MapPin } from "lucide-react"
 import { speakers } from "../speakers"
 import { SiteHeader } from "../site-header"
 import "./ponentes.css"
@@ -40,7 +40,7 @@ export default function PonentesPage() {
 
     <section className="ps-cta" aria-labelledby="ps-cta-title"><div className="ps-content-width ps-cta-inner"><h2 id="ps-cta-title">ASEGURA TU LUGAR</h2><p>ENTRADA LIBRE · SÉ PARTE DE XII FULLDAY</p><EventDetails /><Link className="ps-button ps-button--gradient ps-cta-register" href="/registro">REGÍSTRATE GRATIS <ArrowRight size={18} /></Link></div></section>
 
-    <footer className="ps-footer"><div className="ps-footer-inner"><Link className="ps-footer-brand" href="/" aria-label="XII FULLDAY, ir al inicio"><Image src="/images/event/logo-mark.png" alt="" width={44} height={44} /><span><strong>XII FULLDAY</strong><small>GESTIÓN DE TI | INGENIERÍA DE SISTEMAS</small></span></Link><nav aria-label="Navegación del pie de página"><Link href="/">Inicio</Link><Link href="/ponentes">Ponentes</Link><Link href="/#temario">Temario</Link><Link href="/#lugar">Lugar</Link><Link href="/?faq=1">FAQ</Link><a href="mailto:contacto@fullday.pe">Contacto</a></nav><div className="ps-socials"><a href="https://www.linkedin.com/" aria-label="LinkedIn"><Linkedin /></a><a href="https://www.instagram.com/" aria-label="Instagram"><Instagram /></a><a href="https://www.facebook.com/" aria-label="Facebook"><Facebook /></a><a href="https://www.youtube.com/" aria-label="YouTube"><Youtube /></a></div><small className="ps-copyright">© 2026 XII FULLDAY.<br />Todos los derechos reservados.</small><strong className="ps-footer-tagline">TECNOLOGÍA<br />TALENTO<br />IMPACTO REAL</strong></div></footer>
+    <footer className="ps-footer"><div className="ps-footer-inner"><Link className="ps-footer-brand" href="/" aria-label="XII FULLDAY, ir al inicio"><Image src="/images/event/logo-mark.png" alt="" width={44} height={44} /><span><strong>XII FULLDAY</strong><small>GESTIÓN DE TI | INGENIERÍA DE SISTEMAS</small></span></Link><nav aria-label="Navegación del pie de página"><Link href="/">Inicio</Link><Link href="/ponentes">Ponentes</Link><Link href="/#temario">Temario</Link><Link href="/#lugar">Lugar</Link><Link href="/?faq=1">FAQ</Link><a href="mailto:contacto@fullday.pe">Contacto</a></nav><div className="ps-socials"><a href="https://www.linkedin.com/company/full-day-gestion-de-ti/posts/" aria-label="LinkedIn" target="_blank" rel="noopener noreferrer"><Linkedin /></a><a href="https://www.instagram.com/fulldaygestiondeti/" aria-label="Instagram" target="_blank" rel="noopener noreferrer"><Instagram /></a><a href="https://www.facebook.com/profile.php?id=61594697699354" aria-label="Facebook" target="_blank" rel="noopener noreferrer"><Facebook /></a></div><small className="ps-copyright">© 2026 XII FULLDAY.<br />Todos los derechos reservados.</small><strong className="ps-footer-tagline">TECNOLOGÍA<br />TALENTO<br />IMPACTO REAL</strong></div></footer>
     </main>
   </>
 }

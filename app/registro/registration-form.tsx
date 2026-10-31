@@ -816,7 +816,12 @@ export default function RegistrationForm({ turnstileSiteKey }: { turnstileSiteKe
                     <div className="reg-step-card">
                       <Share2 size={22} />
                       <strong>2. Mantente informado</strong>
-                      <p>Sigue las redes oficiales de ISACA para conocer los horarios.</p>
+                      <p>
+                        Sigue las redes oficiales del FULLDAY para conocer los horarios: {" "}
+                        <a className="underline" href="https://www.instagram.com/fulldaygestiondeti/" target="_blank" rel="noopener noreferrer">Instagram</a>, {" "}
+                        <a className="underline" href="https://www.linkedin.com/company/full-day-gestion-de-ti/posts/" target="_blank" rel="noopener noreferrer">LinkedIn</a> y {" "}
+                        <a className="underline" href="https://www.facebook.com/profile.php?id=61594697699354" target="_blank" rel="noopener noreferrer">Facebook</a>.
+                      </p>
                     </div>
 
                     <div className="reg-step-card">
