@@ -260,3 +260,26 @@
 .transition-smooth {
   transition: all 0.3s cubic-bezier(0.22, 1, 0.36, 1);
 }
+
+/* Marcador de ponente sin foto: iniciales sobre el degradado del evento. */
+.speaker-initials {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: radial-gradient(circle at 50% 35%, #1b4fae 0%, #0a2556 55%, #061630 100%);
+}
+
+.speaker-initials span {
+  display: grid;
+  place-items: center;
+  width: clamp(56px, 46%, 104px);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #bf1df3, #7834f3 45%, #058ff9);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.12), 0 10px 30px rgba(59, 31, 255, 0.4);
+  color: #fff;
+  font-size: clamp(18px, 2.2vw, 30px);
+  font-weight: 900;
+  letter-spacing: 1px;
+}

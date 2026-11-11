@@ -3,6 +3,7 @@ import Image from "next/image"
 import Link from "next/link"
 import { ArrowRight, CalendarDays, Clock3, Facebook, Instagram, Linkedin, MapPin } from "lucide-react"
 import { speakers } from "../speakers"
+import { SpeakerPhoto } from "../speaker-photo"
 import { SiteHeader } from "../site-header"
 import "./ponentes.css"
 
@@ -27,20 +28,17 @@ export default function PonentesPage() {
       <Image className="ps-hero-photo" src="/images/event/ponentes-hero-branded.png" alt="" width={1672} height={941} priority sizes="100vw" />
       <Image className="ps-hero-photo-mobile" src="/images/event/ponentes-hero-mobile.png" alt="" width={1024} height={1536} sizes="(max-width: 520px) 100vw, 1px" />
       <h1 className="ps-visually-hidden" id="ps-title">Nuestros ponentes: grandes ideas, un mismo propósito</h1>
-      <div className="ps-mini-speakers" aria-label="Los seis ponentes del XII FULLDAY">
-        {speakers.map(speaker => <div className="ps-mini-speaker" key={speaker.name}><h2>{speaker.name}</h2><p>{speaker.role}<br /><strong>{speaker.company}</strong></p><span>{speaker.talk}</span></div>)}
-      </div>
       <div className="ps-hero-bottom"><EventDetails compact /><Link className="ps-button ps-button--gradient ps-hero-register" href="/registro">REGÍSTRATE GRATIS <ArrowRight size={17} /></Link></div>
     </section>
 
     <section className="ps-speakers" aria-labelledby="ps-speakers-title"><div className="ps-content-width">
       <div className="ps-section-heading"><div><span>PONENTES</span><h2 id="ps-speakers-title">LÍDERES QUE ESTÁN TRANSFORMANDO EL FUTURO</h2><i /></div><p>Conoce a los expertos, sus experiencias<br />y las ideas que compartirán en XII FULLDAY.</p></div>
-      <div className="ps-speaker-grid">{speakers.map(speaker => <article className="ps-speaker-card" key={speaker.name}><div className="ps-card-photo"><Image src={speaker.image} alt={`Retrato de ${speaker.name}`} fill sizes="(max-width: 600px) 90vw, (max-width: 800px) 45vw, 30vw" loading="eager" /></div><div className="ps-card-info"><h3>{speaker.name}</h3><p>{speaker.role}</p><strong>{speaker.company}</strong><div className="ps-card-talk">{speaker.talk}</div></div></article>)}</div>
+      <div className="ps-speaker-grid">{speakers.map(speaker => <a className="ps-speaker-card" key={speaker.name} href={speaker.linkedin} target="_blank" rel="noopener noreferrer" aria-label={`${speaker.name}, ${speaker.time}. Ver perfil en LinkedIn`}><div className="ps-card-photo"><SpeakerPhoto speaker={speaker} sizes="(max-width: 520px) 90vw, (max-width: 700px) 45vw, 30vw" /><span className="ps-card-linkedin" aria-hidden="true"><Linkedin /></span></div><div className="ps-card-info"><h3>{speaker.name}</h3><p>{speaker.headline}</p>{speaker.detail && <strong>{speaker.detail}</strong>}<div className="ps-card-talk">{speaker.talk ?? <span><Clock3 aria-hidden="true" /> {speaker.time}</span>}</div></div></a>)}</div>
     </div></section>
 
     <section className="ps-cta" aria-labelledby="ps-cta-title"><div className="ps-content-width ps-cta-inner"><h2 id="ps-cta-title">ASEGURA TU LUGAR</h2><p>ENTRADA LIBRE · SÉ PARTE DE XII FULLDAY</p><EventDetails /><Link className="ps-button ps-button--gradient ps-cta-register" href="/registro">REGÍSTRATE GRATIS <ArrowRight size={18} /></Link></div></section>
 
-    <footer className="ps-footer"><div className="ps-footer-inner"><Link className="ps-footer-brand" href="/" aria-label="XII FULLDAY, ir al inicio"><Image src="/images/event/logo-mark.png" alt="" width={44} height={44} /><span><strong>XII FULLDAY</strong><small>GESTIÓN DE TI | INGENIERÍA DE SISTEMAS</small></span></Link><nav aria-label="Navegación del pie de página"><Link href="/">Inicio</Link><Link href="/ponentes">Ponentes</Link><Link href="/#temario">Temario</Link><Link href="/#lugar">Lugar</Link><Link href="/?faq=1">FAQ</Link><a href="mailto:contacto@fullday.pe">Contacto</a></nav><div className="ps-socials"><a href="https://www.linkedin.com/company/full-day-gestion-de-ti/posts/" aria-label="LinkedIn" target="_blank" rel="noopener noreferrer"><Linkedin /></a><a href="https://www.instagram.com/fulldaygestiondeti/" aria-label="Instagram" target="_blank" rel="noopener noreferrer"><Instagram /></a><a href="https://www.facebook.com/profile.php?id=61594697699354" aria-label="Facebook" target="_blank" rel="noopener noreferrer"><Facebook /></a></div><small className="ps-copyright">© 2026 XII FULLDAY.<br />Todos los derechos reservados.</small><strong className="ps-footer-tagline">TECNOLOGÍA<br />TALENTO<br />IMPACTO REAL</strong></div></footer>
+    <footer className="ps-footer"><div className="ps-footer-inner"><Link className="ps-footer-brand" href="/" aria-label="XII FULLDAY, ir al inicio"><Image src="/images/event/logo-mark.png" alt="" width={44} height={44} /><span><strong>XII FULLDAY</strong><small>GESTIÓN DE TI | INGENIERÍA DE SISTEMAS</small></span></Link><nav aria-label="Navegación del pie de página"><Link href="/">Inicio</Link><Link href="/ponentes">Ponentes</Link><Link href="/#temario">Programa</Link><Link href="/#lugar">Lugar</Link><Link href="/?faq=1">FAQ</Link><a href="mailto:contacto@fullday.pe">Contacto</a></nav><div className="ps-socials"><a href="https://www.linkedin.com/company/full-day-gestion-de-ti/posts/" aria-label="LinkedIn" target="_blank" rel="noopener noreferrer"><Linkedin /></a><a href="https://www.instagram.com/fulldaygestiondeti/" aria-label="Instagram" target="_blank" rel="noopener noreferrer"><Instagram /></a><a href="https://www.facebook.com/profile.php?id=61594697699354" aria-label="Facebook" target="_blank" rel="noopener noreferrer"><Facebook /></a></div><small className="ps-copyright">© 2026 XII FULLDAY.<br />Todos los derechos reservados.</small><strong className="ps-footer-tagline">TECNOLOGÍA<br />TALENTO<br />IMPACTO REAL</strong></div></footer>
     </main>
   </>
 }

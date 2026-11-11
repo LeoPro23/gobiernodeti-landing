@@ -5,7 +5,7 @@ import Image from "next/image"
 import Link from "next/link"
 import { Menu, X } from "lucide-react"
 
-const navLinks = [["inicio", "Inicio"], ["ponentes", "Ponentes"], ["temario", "Temario"], ["beneficios", "Beneficios"], ["lugar", "Lugar"]]
+const navLinks = [["inicio", "Inicio"], ["ponentes", "Ponentes"], ["temario", "Programa"], ["beneficios", "Beneficios"], ["lugar", "Lugar"]]
 
 function subscribeToScroll(onChange: () => void) {
   window.addEventListener("scroll", onChange, { passive: true })
