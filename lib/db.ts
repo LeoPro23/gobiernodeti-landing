@@ -37,6 +37,21 @@ export async function ensureRegistrationTable() {
       created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
     );
     CREATE INDEX IF NOT EXISTS idx_registrations_dni ON registrations(dni);
+
+    CREATE TABLE IF NOT EXISTS registration_payment_images (
+      id BIGSERIAL PRIMARY KEY,
+      registration_id INTEGER NOT NULL REFERENCES registrations(id) ON DELETE CASCADE,
+      bucket VARCHAR(255) NOT NULL,
+      object_key VARCHAR(512) NOT NULL UNIQUE,
+      content_type VARCHAR(100) NOT NULL DEFAULT 'image/webp',
+      file_size INTEGER NOT NULL,
+      CONSTRAINT payment_images_webp_type CHECK (content_type = 'image/webp'),
+      CONSTRAINT payment_images_positive_size CHECK (file_size > 0),
+      CONSTRAINT payment_images_key_prefix CHECK (object_key LIKE 'payment-proofs/%.webp'),
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_payment_images_registration_id
+      ON registration_payment_images(registration_id);
   `
   await pool.query(query)
   tableEnsured = true
@@ -85,5 +100,29 @@ export async function createRegistration(data: RegistrationInput) {
   ]
 
   const result = await pool.query(insertQuery, values)
+  return result.rows[0]
+}
+
+export interface PaymentImageInput {
+  registrationId: number
+  bucket: string
+  objectKey: string
+  contentType: "image/webp"
+  fileSize: number
+}
+
+export async function createPaymentImageRecord(data: PaymentImageInput) {
+  await ensureRegistrationTable()
+
+  const result = await pool.query(
+    `
+      INSERT INTO registration_payment_images (
+        registration_id, bucket, object_key, content_type, file_size
+      ) VALUES ($1, $2, $3, $4, $5)
+      RETURNING id, registration_id, bucket, object_key, content_type, file_size, created_at;
+    `,
+    [data.registrationId, data.bucket, data.objectKey, data.contentType, data.fileSize],
+  )
+
   return result.rows[0]
 }
