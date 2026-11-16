@@ -129,3 +129,12 @@ export async function uploadWebp({
     size: buffer.length,
   };
 }
+
+export async function deleteObject(objectKey: string): Promise<void> {
+  if (!/^payment-proofs\/[a-zA-Z0-9._-]+\.webp$/.test(objectKey)) {
+    throw new Error("La key del objeto no es válida.");
+  }
+
+  const config = getMinioConfig();
+  await getMinioClient().removeObject(config.bucket, objectKey);
+}

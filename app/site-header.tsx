@@ -5,7 +5,7 @@ import Image from "next/image"
 import Link from "next/link"
 import { Menu, X } from "lucide-react"
 
-const navLinks = [["inicio", "Inicio"], ["ponentes", "Ponentes"], ["temario", "Programa"], ["beneficios", "Beneficios"], ["lugar", "Lugar"]]
+const navLinks = [["inicio", "Inicio"], ["ponentes", "Ponentes"], ["temario", "Programa"], ["beneficios", "Beneficios"], ["lugar", "Lugar"], ["certificado", "Certificado"]]
 
 function subscribeToScroll(onChange: () => void) {
   window.addEventListener("scroll", onChange, { passive: true })
@@ -31,19 +31,18 @@ export function Brand({ dark = false, home = true }: { dark?: boolean; home?: bo
   </a>
 }
 
-export function SiteHeader({ page, onFaq }: { page: "home" | "speakers" | "register"; onFaq?: () => void }) {
+export function SiteHeader({ page, onFaq }: { page: "home" | "speakers" | "register" | "certificate"; onFaq?: () => void }) {
   const [menuOpen, setMenuOpen] = useState(false)
   const scrolled = useSyncExternalStore(subscribeToScroll, () => window.scrollY > 24, () => false)
   const active = useSyncExternalStore(subscribeToScroll, getActiveSection, () => "inicio")
   const isHome = page === "home"
-  const isRegister = page === "register"
 
   return <header className={scrolled || menuOpen ? "site-header site-header--scrolled" : "site-header"}><div className="page-width site-header-inner">
     <Brand home={isHome} />
     <nav className={menuOpen ? "nav-links nav-links--open" : "nav-links"} aria-label="Navegación principal">
       {navLinks.map(([id, label]) => {
-        const current = isHome ? active === id : (id === "ponentes" && page === "speakers")
-        const href = id === "ponentes" ? "/ponentes" : `${isHome ? "" : "/"}#${id}`
+        const current = isHome ? active === id : (id === "ponentes" && page === "speakers") || (id === "certificado" && page === "certificate")
+        const href = id === "ponentes" ? "/ponentes" : id === "certificado" ? "/certificado" : `${isHome ? "" : "/"}#${id}`
         return <a key={id} href={href} className={current ? "is-active" : undefined} aria-current={current ? (isHome ? "true" : "page") : undefined} onClick={() => setMenuOpen(false)}>{label}</a>
       })}
       {isHome ? <button type="button" onClick={() => { onFaq?.(); setMenuOpen(false) }}>FAQ</button> : <Link href="/?faq=1" onClick={() => setMenuOpen(false)}>FAQ</Link>}

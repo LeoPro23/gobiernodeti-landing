@@ -464,7 +464,7 @@ export default function RegistrationForm({ turnstileSiteKey }: { turnstileSiteKe
                 <form className="reg-form" onSubmit={handleNextToConfirmation}>
                   {errorMessage && (
                     <div className="reg-alert reg-alert--error" role="alert">
-                      <AlertCircle size={18} className="flex-shrink-0" />
+                      <AlertCircle size={18} className="shrink-0" />
                       <span>{errorMessage}</span>
                     </div>
                   )}
@@ -639,7 +639,7 @@ export default function RegistrationForm({ turnstileSiteKey }: { turnstileSiteKe
 
                 {errorMessage && (
                   <div className="reg-alert reg-alert--error mb-4" role="alert">
-                    <AlertCircle size={18} className="flex-shrink-0" />
+                    <AlertCircle size={18} className="shrink-0" />
                     <span>{errorMessage}</span>
                   </div>
                 )}
@@ -743,7 +743,7 @@ export default function RegistrationForm({ turnstileSiteKey }: { turnstileSiteKe
                   />
                 ) : (
                   <div className="reg-alert reg-alert--error mb-4" role="alert">
-                    <AlertCircle size={18} className="flex-shrink-0" />
+                    <AlertCircle size={18} className="shrink-0" />
                     <span>La verificación de seguridad no está disponible. Por favor, intenta inscribirte más tarde.</span>
                   </div>
                 )}
@@ -866,6 +866,9 @@ export default function RegistrationForm({ turnstileSiteKey }: { turnstileSiteKe
 
                   <Link href="/" className="reg-btn reg-btn--primary">
                     IR AL INICIO <ArrowRight size={16} />
+                  </Link>
+                  <Link href="/certificado" className="reg-btn reg-btn--outline">
+                    QUIERO MI CERTIFICADO <ArrowRight size={16} />
                   </Link>
                 </div>
               </div>

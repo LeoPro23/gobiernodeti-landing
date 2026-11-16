@@ -15,7 +15,7 @@ const eventWeekday = eventDate({ weekday: "long" }).replace(/^./, letter => lett
 const eventYear = eventDate({ year: "numeric" })
 
 // La entrada es gratuita; solo el certificado (opcional) tiene costo. Precio en soles, null mientras no esté definido.
-const CERTIFICATE_PRICE: number | null = null
+const CERTIFICATE_PRICE: number | null = 20
 const certificatePrice = CERTIFICATE_PRICE === null ? "precio por confirmar" : `S/ ${CERTIFICATE_PRICE}`
 
 const benefits = [
@@ -135,7 +135,7 @@ export default function Landing() {
 
       <section className="section tickets-section" id="entradas"><div className="page-width tickets-layout">
         <div className="tickets-title" data-reveal><span className="eyebrow">ENTRADAS</span><h2>ENTRADA LIBRE</h2><i /><p>El evento es gratuito: solo regístrate. El certificado es opcional.</p></div>
-        <div className="pricing-grid">{plans.map((plan, index) => <article className={`price-card ${plan.badge ? "price-card--popular" : ""}`} key={plan.name} data-reveal style={stagger(index, 120)}>{plan.badge && <span className="popular-label">{plan.badge}</span>}<h3><plan.icon size={20} /> {plan.name}</h3><Price value={plan.price} /><ul>{plan.features.map(feature => <li key={feature}><Check size={12} /> {feature}</li>)}</ul><Link href="/registro" className={plan.badge ? "button button--gradient price-button" : "button button--outline price-button"}>{plan.cta}</Link></article>)}</div>
+        <div className="pricing-grid">{plans.map((plan, index) => <article className={`price-card ${plan.badge ? "price-card--popular" : ""}`} key={plan.name} data-reveal style={stagger(index, 120)}>{plan.badge && <span className="popular-label">{plan.badge}</span>}<h3><plan.icon size={20} /> {plan.name}</h3><Price value={plan.price} /><ul>{plan.features.map(feature => <li key={feature}><Check size={12} /> {feature}</li>)}</ul><Link href={plan.certificate ? "/certificado" : "/registro"} className={plan.badge ? "button button--gradient price-button" : "button button--outline price-button"}>{plan.cta}</Link></article>)}</div>
         <div className="why-attend" data-reveal style={stagger(3, 120)}><h2>¿POR QUÉ ASISTIR?</h2><ul>{reasons.map((reason, index) => <li key={reason} style={stagger(index, 80)}><span><Check size={14} strokeWidth={3} /></span>{reason}</li>)}</ul></div>
       </div></section>
 
