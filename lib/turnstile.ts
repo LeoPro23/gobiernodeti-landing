@@ -1,6 +1,11 @@
 import "server-only"
 
 const SITEVERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify"
+const TEST_SECRET_KEYS = new Set([
+  "1x0000000000000000000000000000000AA",
+  "2x0000000000000000000000000000000AA",
+  "3x0000000000000000000000000000000AA",
+])
 const UNAVAILABLE_MESSAGE = "No se pudo verificar la seguridad de tu inscripción. Por favor, inténtalo de nuevo en unos momentos."
 const INVALID_MESSAGE = "La verificación de seguridad no es válida o ha expirado. Por favor, complétala de nuevo."
 
@@ -41,15 +46,19 @@ export async function verifyTurnstileToken(token: unknown): Promise<
     if (!response.ok) return { success: false, error: UNAVAILABLE_MESSAGE }
 
     const result: unknown = await response.json()
+    if (!result || typeof result !== "object" || !("success" in result) || result.success !== true) {
+      return { success: false, error: INVALID_MESSAGE }
+    }
+
+    // Cloudflare's official test secrets omit action and return example.com.
+    // Keep the strict action/hostname checks for every real configuration.
+    if (TEST_SECRET_KEYS.has(config.secretKey)) return { success: true }
+
     if (
-      !result || typeof result !== "object" ||
-      !("success" in result) || result.success !== true ||
       !("action" in result) || result.action !== "registro" ||
       !("hostname" in result) || typeof result.hostname !== "string" ||
       result.hostname.toLowerCase() !== config.expectedHostname
-    ) {
-      return { success: false, error: INVALID_MESSAGE }
-    }
+    ) return { success: false, error: INVALID_MESSAGE }
 
     return { success: true }
   } catch {
