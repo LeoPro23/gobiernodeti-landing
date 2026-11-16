@@ -1,26 +1,30 @@
-import { Pool } from "pg"
+import { Pool } from "pg";
 
-const connectionString = process.env.DATABASE_URL || "postgres://postgres:123fullgayGa@147.93.180.79:6967/fulldaydb?sslmode=disable"
+const connectionString =
+  process.env.DATABASE_URL ||
+  "postgres://postgres:123fullgayGa@147.93.180.79:6967/fulldaydb?sslmode=disable";
 
 declare global {
   // eslint-disable-next-line no-var
-  var __dbPool: Pool | undefined
+  var __dbPool: Pool | undefined;
 }
 
-export const pool = globalThis.__dbPool ?? new Pool({
-  connectionString,
-  connectionTimeoutMillis: 5000,
-  max: 10,
-})
+export const pool =
+  globalThis.__dbPool ??
+  new Pool({
+    connectionString,
+    connectionTimeoutMillis: 5000,
+    max: 10,
+  });
 
 if (process.env.NODE_ENV !== "production") {
-  globalThis.__dbPool = pool
+  globalThis.__dbPool = pool;
 }
 
-let tableEnsured = false
+let tableEnsured = false;
 
 export async function ensureRegistrationTable() {
-  if (tableEnsured) return
+  if (tableEnsured) return;
   const query = `
     CREATE TABLE IF NOT EXISTS registrations (
       id SERIAL PRIMARY KEY,
@@ -43,40 +47,54 @@ export async function ensureRegistrationTable() {
       registration_id INTEGER NOT NULL REFERENCES registrations(id) ON DELETE CASCADE,
       bucket VARCHAR(255) NOT NULL,
       object_key VARCHAR(512) NOT NULL UNIQUE,
+      operation_number VARCHAR(100),
       content_type VARCHAR(100) NOT NULL DEFAULT 'image/webp',
       file_size INTEGER NOT NULL,
+      status VARCHAR(20) NOT NULL DEFAULT 'pending',
       CONSTRAINT payment_images_webp_type CHECK (content_type = 'image/webp'),
       CONSTRAINT payment_images_positive_size CHECK (file_size > 0),
       CONSTRAINT payment_images_key_prefix CHECK (object_key LIKE 'payment-proofs/%.webp'),
+      CONSTRAINT payment_images_status CHECK (status IN ('pending', 'valid', 'invalid')),
       created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
     );
+    ALTER TABLE registration_payment_images
+      ADD COLUMN IF NOT EXISTS operation_number VARCHAR(100),
+      ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'pending';
     CREATE INDEX IF NOT EXISTS idx_payment_images_registration_id
       ON registration_payment_images(registration_id);
-  `
-  await pool.query(query)
-  tableEnsured = true
+    CREATE INDEX IF NOT EXISTS idx_payment_images_operation_number
+      ON registration_payment_images(operation_number);
+    CREATE UNIQUE INDEX IF NOT EXISTS uq_registration_valid_certificate_payment
+      ON registration_payment_images(registration_id)
+      WHERE status = 'valid';
+  `;
+  await pool.query(query);
+  tableEnsured = true;
 }
 
 export interface RegistrationInput {
-  nombres: string
-  apellidos: string
-  dni: string
-  universidad: string
-  carrera: string
-  ciclo: string
-  telefono?: string
-  ciudad?: string
-  aceptaTerminos: boolean
-  autorizaDatos: boolean
+  nombres: string;
+  apellidos: string;
+  dni: string;
+  universidad: string;
+  carrera: string;
+  ciclo: string;
+  telefono?: string;
+  ciudad?: string;
+  aceptaTerminos: boolean;
+  autorizaDatos: boolean;
 }
 
 export async function createRegistration(data: RegistrationInput) {
-  await ensureRegistrationTable()
+  await ensureRegistrationTable();
 
   // Verificar si ya existe con ese DNI
-  const existing = await pool.query("SELECT id, dni FROM registrations WHERE dni = $1 LIMIT 1", [data.dni.trim()])
+  const existing = await pool.query(
+    "SELECT id, dni FROM registrations WHERE dni = $1 LIMIT 1",
+    [data.dni.trim()],
+  );
   if (existing.rowCount && existing.rowCount > 0) {
-    throw new Error("Ya existe un registro con este DNI.")
+    throw new Error("Ya existe un registro con este DNI.");
   }
 
   const insertQuery = `
@@ -85,7 +103,7 @@ export async function createRegistration(data: RegistrationInput) {
     ) VALUES (
       $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
     ) RETURNING id, nombres, apellidos, dni, created_at;
-  `
+  `;
   const values = [
     data.nombres.trim(),
     data.apellidos.trim(),
@@ -97,32 +115,93 @@ export async function createRegistration(data: RegistrationInput) {
     data.ciudad?.trim() || null,
     data.aceptaTerminos,
     data.autorizaDatos,
-  ]
+  ];
 
-  const result = await pool.query(insertQuery, values)
-  return result.rows[0]
+  const result = await pool.query(insertQuery, values);
+  return result.rows[0];
 }
 
 export interface PaymentImageInput {
-  registrationId: number
-  bucket: string
-  objectKey: string
-  contentType: "image/webp"
-  fileSize: number
+  registrationId: number;
+  bucket: string;
+  objectKey: string;
+  operationNumber: string;
+  contentType: "image/webp";
+  fileSize: number;
+  status?: CertificatePaymentStatus;
 }
 
+export type CertificatePaymentStatus = "pending" | "valid" | "invalid";
+
 export async function createPaymentImageRecord(data: PaymentImageInput) {
-  await ensureRegistrationTable()
+  await ensureRegistrationTable();
+
+  const operationNumber = data.operationNumber.trim();
+  if (!operationNumber || operationNumber.length > 100) {
+    throw new Error("El número de operación no es válido.");
+  }
+
+  const status = data.status ?? "pending";
+  if (
+    !(["pending", "valid", "invalid"] as CertificatePaymentStatus[]).includes(
+      status,
+    )
+  ) {
+    throw new Error("El estado del comprobante no es válido.");
+  }
 
   const result = await pool.query(
     `
       INSERT INTO registration_payment_images (
-        registration_id, bucket, object_key, content_type, file_size
-      ) VALUES ($1, $2, $3, $4, $5)
-      RETURNING id, registration_id, bucket, object_key, content_type, file_size, created_at;
+        registration_id, bucket, object_key, operation_number, content_type, file_size, status
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+      RETURNING id, registration_id, bucket, object_key, operation_number,
+        content_type, file_size, status, created_at;
     `,
-    [data.registrationId, data.bucket, data.objectKey, data.contentType, data.fileSize],
-  )
+    [
+      data.registrationId,
+      data.bucket,
+      data.objectKey,
+      operationNumber,
+      data.contentType,
+      data.fileSize,
+      status,
+    ],
+  );
 
-  return result.rows[0]
+  return result.rows[0];
+}
+
+export async function findRegistrationByDni(dni: string) {
+  await ensureRegistrationTable();
+
+  const result = await pool.query(
+    `
+      SELECT id, nombres, apellidos, dni
+      FROM registrations
+      WHERE dni = $1
+      LIMIT 1;
+    `,
+    [dni.trim()],
+  );
+
+  return result.rows[0] ?? null;
+}
+
+export async function findLatestCertificatePayment(registrationId: number) {
+  await ensureRegistrationTable();
+
+  const result = await pool.query(
+    `
+      SELECT id, registration_id, bucket, object_key, operation_number,
+        content_type, file_size, status, created_at
+      FROM registration_payment_images
+      WHERE registration_id = $1
+      ORDER BY created_at DESC, id DESC
+      LIMIT 1;
+    `,
+    [registrationId],
+  );
+
+  return result.rows[0] ?? null;
 }
