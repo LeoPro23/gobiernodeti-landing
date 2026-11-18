@@ -1,24 +1,25 @@
+import "server-only";
 import { Pool } from "pg";
-
-const connectionString =
-  process.env.DATABASE_URL ||
-  "postgres://postgres:123fullgayGa@147.93.180.79:6967/fulldaydb?sslmode=disable";
 
 declare global {
   // eslint-disable-next-line no-var
   var __dbPool: Pool | undefined;
 }
 
-export const pool =
-  globalThis.__dbPool ??
-  new Pool({
+let localPool: Pool | undefined;
+
+// Docker injects secrets at runtime, not while collecting page modules.
+export function getPool() {
+  if (localPool) return localPool;
+  const connectionString = process.env.DATABASE_URL;
+  if (!connectionString) throw new Error("Falta configurar DATABASE_URL en el servidor.");
+  localPool = globalThis.__dbPool ?? new Pool({
     connectionString,
     connectionTimeoutMillis: 5000,
     max: 10,
   });
-
-if (process.env.NODE_ENV !== "production") {
-  globalThis.__dbPool = pool;
+  if (process.env.NODE_ENV !== "production") globalThis.__dbPool = localPool;
+  return localPool;
 }
 
 let tableEnsured = false;
@@ -68,7 +69,7 @@ export async function ensureRegistrationTable() {
       ON registration_payment_images(registration_id)
       WHERE status = 'valid';
   `;
-  await pool.query(query);
+  await getPool().query(query);
   tableEnsured = true;
 }
 
@@ -89,7 +90,7 @@ export async function createRegistration(data: RegistrationInput) {
   await ensureRegistrationTable();
 
   // Verificar si ya existe con ese DNI
-  const existing = await pool.query(
+  const existing = await getPool().query(
     "SELECT id, dni FROM registrations WHERE dni = $1 LIMIT 1",
     [data.dni.trim()],
   );
@@ -117,7 +118,7 @@ export async function createRegistration(data: RegistrationInput) {
     data.autorizaDatos,
   ];
 
-  const result = await pool.query(insertQuery, values);
+  const result = await getPool().query(insertQuery, values);
   return result.rows[0];
 }
 
@@ -150,7 +151,7 @@ export async function createPaymentImageRecord(data: PaymentImageInput) {
     throw new Error("El estado del comprobante no es válido.");
   }
 
-  const result = await pool.query(
+  const result = await getPool().query(
     `
       INSERT INTO registration_payment_images (
         registration_id, bucket, object_key, operation_number, content_type, file_size, status
@@ -175,7 +176,7 @@ export async function createPaymentImageRecord(data: PaymentImageInput) {
 export async function findRegistrationByDni(dni: string) {
   await ensureRegistrationTable();
 
-  const result = await pool.query(
+  const result = await getPool().query(
     `
       SELECT id, nombres, apellidos, dni
       FROM registrations
@@ -191,7 +192,7 @@ export async function findRegistrationByDni(dni: string) {
 export async function findLatestCertificatePayment(registrationId: number) {
   await ensureRegistrationTable();
 
-  const result = await pool.query(
+  const result = await getPool().query(
     `
       SELECT id, registration_id, bucket, object_key, operation_number,
         content_type, file_size, status, created_at
