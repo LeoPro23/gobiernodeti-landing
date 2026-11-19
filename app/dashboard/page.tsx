@@ -2,6 +2,7 @@ import Link from "next/link"
 import { ArrowLeft, ArrowRight, Building2, CalendarDays, ListFilter, Search, Users, RefreshCw } from "lucide-react"
 import { getAdminRegistrations, PAGE_SIZE, type SearchParams } from "@/lib/admin-registrations"
 import { LogoutButton } from "./logout-button"
+import { YambolyLauncher } from "./yamboly-launcher"
 
 export const runtime = "nodejs"
 
@@ -24,7 +25,11 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     <>
       <header className="admin-topbar">
         <Link href="/" className="admin-brand">XII <strong>FULLDAY</strong><span>PANEL DE ADMINISTRACIÓN</span></Link>
-        <div className="admin-topbar-actions"><span className="admin-private">Acceso privado</span><LogoutButton /></div>
+        <div className="admin-topbar-actions">
+          <YambolyLauncher />
+          <span className="admin-private">Acceso privado</span>
+          <LogoutButton />
+        </div>
       </header>
       <main className="admin-container">
         <section className="admin-heading">
