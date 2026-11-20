@@ -1,8 +1,6 @@
 import Link from "next/link"
-import { ArrowLeft, ArrowRight, Building2, CalendarDays, ListFilter, Search, Users, RefreshCw } from "lucide-react"
+import { ArrowLeft, ArrowRight, Building2, CalendarDays, FileCheck2, ListFilter, Search, Users, RefreshCw } from "lucide-react"
 import { getAdminRegistrations, PAGE_SIZE, type SearchParams } from "@/lib/admin-registrations"
-import { LogoutButton } from "./logout-button"
-import { YambolyLauncher } from "./yamboly-launcher"
 
 export const runtime = "nodejs"
 
@@ -22,19 +20,13 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   }
 
   return (
-    <>
-      <header className="admin-topbar">
-        <Link href="/" className="admin-brand">XII <strong>FULLDAY</strong><span>PANEL DE ADMINISTRACIÓN</span></Link>
-        <div className="admin-topbar-actions">
-          <YambolyLauncher />
-          <span className="admin-private">Acceso privado</span>
-          <LogoutButton />
-        </div>
-      </header>
       <main className="admin-container">
         <section className="admin-heading">
           <div><p className="admin-eyebrow">GESTIÓN DEL EVENTO / INSCRIPCIONES</p><h1>Los próximos protagonistas.</h1><p className="admin-muted">Todos los inscritos al XII FULLDAY, en un solo lugar.</p></div>
-          <a href={pageUrl(page)} className="admin-secondary"><RefreshCw size={16} aria-hidden="true" /> Actualizar datos</a>
+          <div className="admin-heading-actions">
+            <Link href="/dashboard/certificados" className="admin-primary"><FileCheck2 size={16} aria-hidden="true" /> Revisar certificados</Link>
+            <a href={pageUrl(page)} className="admin-secondary"><RefreshCw size={16} aria-hidden="true" /> Actualizar datos</a>
+          </div>
         </section>
 
         <section className="admin-stats" aria-label="Resumen general de inscripciones">
@@ -78,6 +70,5 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         </section>
         <p className="admin-footnote">XII FULLDAY · Universidad Nacional de Trujillo <span>Datos personales · Uso exclusivo de administración</span></p>
       </main>
-    </>
   )
 }

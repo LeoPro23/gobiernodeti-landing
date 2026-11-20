@@ -138,3 +138,11 @@ export async function deleteObject(objectKey: string): Promise<void> {
   const config = getMinioConfig();
   await getMinioClient().removeObject(config.bucket, objectKey);
 }
+
+export async function readPaymentVoucher(bucket: string, objectKey: string) {
+  if (!/^payment-proofs\/[a-zA-Z0-9._-]+\.webp$/.test(objectKey)) {
+    throw new Error("La key del comprobante no es válida.");
+  }
+
+  return getMinioClient().getObject(bucket, objectKey);
+}

@@ -4,9 +4,9 @@ import Link from "next/link"
 
 export default function DashboardError({ retry }: { error: Error & { digest?: string }; retry: () => void }) {
   return <main className="admin-container"><section className="admin-panel admin-empty" role="alert">
-    <p className="admin-eyebrow">PANEL DE INSCRIPCIONES</p>
-    <h1>No se pudieron cargar los inscritos.</h1>
-    <p>Intentá nuevamente. Si el problema continúa, revisá DATABASE_URL y el acceso a PostgreSQL desde el servidor.</p>
+    <p className="admin-eyebrow">PANEL DE ADMINISTRACIÓN</p>
+    <h1>No se pudieron cargar los datos.</h1>
+    <p>Intenta nuevamente.</p>
     <button className="admin-primary" onClick={retry}>Volver a intentar</button>
     <Link className="admin-clear" href="/login">Volver al acceso</Link>
   </section></main>

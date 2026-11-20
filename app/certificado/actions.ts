@@ -1,10 +1,9 @@
 "use server"
 
-import { createPaymentImageRecord, findLatestCertificatePayment, findRegistrationByDni } from "@/lib/db"
+import { createPaymentImageRecord, findCurrentCertificatePayment, findRegistrationByDni, type CertificatePaymentStatus } from "@/lib/db"
 import { deleteObject, uploadWebp } from "@/lib/minio"
 import { verifyTurnstileToken } from "@/lib/turnstile"
 
-type PaymentStatus = "pending" | "valid" | "invalid"
 
 interface CertificatePerson {
   id: number
@@ -17,7 +16,7 @@ export interface CertificateLookupResult {
   success: boolean
   error?: string
   registration?: CertificatePerson
-  payment?: { status: PaymentStatus }
+  payment?: { status: CertificatePaymentStatus }
 }
 
 export interface CertificateRequestResult {
@@ -43,11 +42,11 @@ export async function lookupCertificateRequest(dniValue: unknown, turnstileToken
     const registration = await findRegistrationByDni(dni)
     if (!registration) return { success: false, error: "No encontramos una inscripción con ese DNI." }
 
-    const payment = await findLatestCertificatePayment(registration.id)
+    const payment = await findCurrentCertificatePayment(registration.id)
     return {
       success: true,
       registration,
-      payment: payment ? { status: payment.status as PaymentStatus } : undefined,
+      payment: payment ? { status: payment.status } : undefined,
     }
   } catch (error) {
     console.error("Error consultando solicitud de certificado:", error)
@@ -77,7 +76,7 @@ export async function submitCertificateRequest(
     const registration = await findRegistrationByDni(dni)
     if (!registration) return { success: false, error: "No encontramos una inscripción con ese DNI." }
 
-    const previousPayment = await findLatestCertificatePayment(registration.id)
+    const previousPayment = await findCurrentCertificatePayment(registration.id)
     if (previousPayment?.status === "valid") return { success: false, error: "Tu solicitud de certificado ya fue validada." }
     if (previousPayment?.status === "pending") return { success: false, error: "Tu comprobante ya fue enviado y se encuentra en revisión." }
 
