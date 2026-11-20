@@ -69,7 +69,7 @@ export default function YambolyScreenPage() {
     if (start && duration) {
       setTimerTotal(duration / 1000);
       const timerInt = setInterval(() => {
-        const elapsed = Date.now() - start;
+        const elapsed = (session.paused_at ? new Date(session.paused_at).getTime() : Date.now()) - start;
         const left = Math.max(0, Math.ceil((duration - elapsed) / 1000));
         setTimerRemaining(left);
       }, 250);
@@ -77,7 +77,7 @@ export default function YambolyScreenPage() {
     } else {
       setTimerRemaining(0);
     }
-  }, [data?.session?.status, data?.session?.reading_start_time, data?.session?.answering_start_time]);
+  }, [data?.session?.status, data?.session?.reading_start_time, data?.session?.answering_start_time, data?.session?.paused_at]);
 
   if (!data) {
     return (

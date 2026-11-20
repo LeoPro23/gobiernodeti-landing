@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
     const categories = await getYambolyCategories();
     const rawParticipantsCount = await getYambolyParticipantsCount("fullday");
     const participantsCount = Number(rawParticipantsCount || 0);
-    const leaderboard = await getYambolyLeaderboard("fullday", 15);
+    const leaderboard = session.status === "QUESTION_ANSWERING" ? [] : await getYambolyLeaderboard("fullday", 15);
     const prizes = await getYambolyPrizes("fullday");
 
     // Fetch history of used questions
@@ -96,20 +96,14 @@ export async function GET(req: NextRequest) {
       const p = await getParticipantByToken(token);
       if (p) {
         // Calculate participant overall rank
-        const rankRes = await pool.query(
-          `SELECT COUNT(*) + 1 as rank 
-           FROM yamboly_participants 
-           WHERE session_id = $1 
-             AND (score > $2 OR (score = $2 AND total_response_time_ms < $3))`,
-          [session.id, p.score, p.total_response_time_ms]
-        );
+        const allRanks = session.status === "QUESTION_ANSWERING" ? [] : await getYambolyLeaderboard(session.id, 2147483647);
 
         participant = {
           id: p.id,
           full_name: p.full_name,
           score: p.score,
           correct_count: p.correct_count,
-          rank: parseInt(rankRes.rows[0]?.rank || "1", 10),
+          rank: allRanks.findIndex((entry: { id: number }) => entry.id === p.id) + 1,
         };
 
         if (session.current_question_id) {
@@ -121,7 +115,13 @@ export async function GET(req: NextRequest) {
           );
           if (ansRes.rowCount && ansRes.rowCount > 0) {
             hasAnsweredCurrentQuestion = true;
-            participantCurrentAnswer = ansRes.rows[0];
+            participantCurrentAnswer = ["QUESTION_REVEAL", "ROUND_RANKING", "PODIUM"].includes(session.status)
+              ? ansRes.rows[0]
+              : { selected_option_id: ansRes.rows[0].selected_option_id };
+            if (session.status === "QUESTION_ANSWERING" && ansRes.rows[0].is_correct) {
+              participant.score -= 4;
+              participant.correct_count -= 1;
+            }
           }
         }
       }
@@ -138,7 +138,7 @@ export async function GET(req: NextRequest) {
       leaderboard,
       prizes,
       participantsCount: Number(participantsCount || 0),
-      participant,
+      participant: participant && session.status === "QUESTION_ANSWERING" ? { ...participant, rank: null } : participant,
       hasAnsweredCurrentQuestion,
       participantCurrentAnswer,
       serverTime: new Date().toISOString(),

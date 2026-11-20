@@ -30,10 +30,9 @@ const PHASES = [
 
 export default function YambolyModeratorPage() {
   const [data, setData] = useState<any>(null);
-  const [passcode, setPasscode] = useState("yamboly2026");
   const [isActionLoading, setIsActionLoading] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [autoSequence, setAutoSequence] = useState(true); // Default TRUE for fully automated flow!
-  const [isPaused, setIsPaused] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const autoTimerRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -57,12 +56,12 @@ export default function YambolyModeratorPage() {
 
   const triggerAction = async (type: string, payload: any = {}) => {
     setIsActionLoading(true);
+    setActionError(null);
     try {
       const res = await fetch("/api/yamboly/admin", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          passcode,
           action: { type, ...payload },
         }),
       });
@@ -70,7 +69,7 @@ export default function YambolyModeratorPage() {
       if (!res.ok) throw new Error(json.error || "Error al ejecutar acción");
       await fetchState();
     } catch (err: any) {
-      console.error(err);
+      setActionError(err instanceof Error ? err.message : "No se pudo ejecutar la acción.");
     } finally {
       setIsActionLoading(false);
     }
@@ -79,7 +78,7 @@ export default function YambolyModeratorPage() {
   // FULLY AUTOMATED ROUND SEQUENCE ENGINE:
   // ROULETTE (5s) -> READING (8s) -> ANSWERING (20s) -> REVEAL
   useEffect(() => {
-    if (!autoSequence || isPaused || !data?.session) return;
+    if (!autoSequence || data?.session?.paused_at || !data?.session) return;
     const session = data.session;
     const status = session.status;
 
@@ -93,14 +92,14 @@ export default function YambolyModeratorPage() {
     } else if (status === "QUESTION_READING" && session.reading_start_time) {
       const start = new Date(session.reading_start_time).getTime();
       const elapsed = Date.now() - start;
-      const remaining = Math.max(200, 8000 - elapsed);
+      const remaining = Math.max(200, session.reading_duration_sec * 1000 - elapsed);
       autoTimerRef.current = setTimeout(() => {
         triggerAction("START_ANSWERING");
       }, remaining);
     } else if (status === "QUESTION_ANSWERING" && session.answering_start_time) {
       const start = new Date(session.answering_start_time).getTime();
       const elapsed = Date.now() - start;
-      const remaining = Math.max(200, 20000 - elapsed);
+      const remaining = Math.max(200, session.answering_duration_sec * 1000 - elapsed);
       autoTimerRef.current = setTimeout(() => {
         triggerAction("REVEAL_ANSWER");
       }, remaining);
@@ -111,7 +110,7 @@ export default function YambolyModeratorPage() {
     };
   }, [
     autoSequence, 
-    isPaused, 
+    data?.session?.paused_at,
     data?.session?.status, 
     data?.session?.reading_start_time, 
     data?.session?.answering_start_time
@@ -130,6 +129,7 @@ export default function YambolyModeratorPage() {
 
   const { session, currentQuestion, playedQuestions, remainingPerCategory } = data;
   const status = session?.status;
+  const isPaused = !!session?.paused_at;
   const currentRound = session?.current_round || 0;
   const totalRounds = session?.total_rounds || 5;
 
@@ -309,9 +309,9 @@ export default function YambolyModeratorPage() {
                 </span>
               </label>
 
-              {autoSequence && (
+              {status !== "WAITING_REGISTRATION" && status !== "PODIUM" && (
                 <button
-                  onClick={() => setIsPaused(!isPaused)}
+                  onClick={() => triggerAction(isPaused ? "RESUME" : "PAUSE")}
                   style={{
                     padding: "4px 12px",
                     borderRadius: "8px",
@@ -327,7 +327,7 @@ export default function YambolyModeratorPage() {
                   }}
                 >
                   {isPaused ? <Play size={14} /> : <Pause size={14} />}
-                  {isPaused ? "Reanudar Tiempos" : "Pausar Tiempos"}
+                  {isPaused ? "Reanudar partida" : "Pausar partida"}
                 </button>
               )}
             </div>
@@ -395,6 +395,7 @@ export default function YambolyModeratorPage() {
         </div>
 
         {/* HERO COMMAND SECTION (THE ONE SMART BUTTON) */}
+        {actionError && <p role="alert" style={{ color: "#ff8da8", marginBottom: "1rem" }}>{actionError}</p>}
         <div
           className="yb-hud-panel"
           style={{
@@ -413,7 +414,7 @@ export default function YambolyModeratorPage() {
           </div>
 
           <button
-            disabled={isActionLoading || status === "PODIUM"}
+            disabled={isActionLoading || isPaused || status === "PODIUM"}
             onClick={() => triggerAction(nextAction.action)}
             style={{
               padding: "1.3rem 2.8rem",

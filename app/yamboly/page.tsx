@@ -65,7 +65,7 @@ export default function YambolyParticipantPage() {
     if (start && duration) {
       setTimerTotal(duration / 1000);
       const timerInt = setInterval(() => {
-        const elapsed = Date.now() - start;
+        const elapsed = (session.paused_at ? new Date(session.paused_at).getTime() : Date.now()) - start;
         const left = Math.max(0, Math.ceil((duration - elapsed) / 1000));
         setTimerRemaining(left);
       }, 250);
@@ -73,7 +73,7 @@ export default function YambolyParticipantPage() {
     } else {
       setTimerRemaining(0);
     }
-  }, [data?.session?.status, data?.session?.reading_start_time, data?.session?.answering_start_time]);
+  }, [data?.session?.status, data?.session?.reading_start_time, data?.session?.answering_start_time, data?.session?.paused_at]);
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -101,7 +101,7 @@ export default function YambolyParticipantPage() {
   };
 
   const handleSelectOption = async (optionId: string) => {
-    if (!data?.session || data.session.status !== "QUESTION_ANSWERING") return;
+    if (!data?.session || data.session.status !== "QUESTION_ANSWERING" || data.session.paused_at) return;
     if (data.hasAnsweredCurrentQuestion || isSendingAnswer) return;
 
     setSelectedOption(optionId);
@@ -244,51 +244,9 @@ export default function YambolyParticipantPage() {
                 />
               </div>
 
-              <div>
-                <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 700, marginBottom: "6px", color: "#cbd5e1" }}>
-                  Correo electrónico *
-                </label>
-                <input
-                  type="email"
-                  required
-                  placeholder="ejemplo@correo.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  style={{
-                    width: "100%",
-                    padding: "0.95rem 1rem",
-                    borderRadius: "14px",
-                    background: "rgba(255,255,255,0.06)",
-                    border: "1px solid rgba(255,255,255,0.18)",
-                    color: "#fff",
-                    fontSize: "1rem",
-                    outline: "none",
-                  }}
-                />
-              </div>
-
-              <div>
-                <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 700, marginBottom: "6px", color: "#cbd5e1" }}>
-                  Número de teléfono *
-                </label>
-                <input
-                  type="tel"
-                  required
-                  placeholder="Ej. 987654321"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  style={{
-                    width: "100%",
-                    padding: "0.95rem 1rem",
-                    borderRadius: "14px",
-                    background: "rgba(255,255,255,0.06)",
-                    border: "1px solid rgba(255,255,255,0.18)",
-                    color: "#fff",
-                    fontSize: "1rem",
-                    outline: "none",
-                  }}
-                />
-              </div>
+              <label>Correo electrónico *<input aria-label="Correo electrónico" type="email" required maxLength={200} value={email} onChange={(e) => setEmail(e.target.value)} className="yb-mobile-btn" /></label>
+              <label>Número de teléfono *<input aria-label="Número de teléfono" type="tel" required maxLength={50} value={phone} onChange={(e) => setPhone(e.target.value)} className="yb-mobile-btn" /></label>
+              <p>Usaremos estos datos para identificar a los participantes y coordinar la premiación. Tu nombre se mostrará en el ranking. Conserva este navegador para mantener tu participación.</p>
 
               <button
                 type="submit"
@@ -339,7 +297,7 @@ export default function YambolyParticipantPage() {
                   }}
                 >
                   <CheckCircle2 size={18} />
-                  Registro verificado para el podio de premios
+                  Inscripción confirmada
                 </div>
               </div>
             )}
@@ -504,7 +462,7 @@ export default function YambolyParticipantPage() {
                       <button
                         key={opt.id}
                         onClick={() => handleSelectOption(opt.id)}
-                        disabled={isSendingAnswer}
+                        disabled={isSendingAnswer || !!session.paused_at}
                         className={`yb-mobile-btn ${selectedOption === opt.id ? "is-selected" : ""}`}
                         style={{
                           borderLeft: `6px solid ${

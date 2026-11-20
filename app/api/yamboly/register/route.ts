@@ -6,7 +6,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { fullName, email, phone } = body;
 
-    if (!fullName || !email || !phone) {
+    if (typeof fullName !== "string" || typeof email !== "string" || typeof phone !== "string") {
       return NextResponse.json(
         { error: "Por favor completa todos los campos requeridos." },
         { status: 400 }
@@ -19,16 +19,15 @@ export async function POST(req: NextRequest) {
       phone,
     });
 
-    const response = NextResponse.json({
-      success: true,
-      participant,
-    });
+    const response = NextResponse.json({ success: true });
 
     // Set cookie valid for 7 days
     response.cookies.set("yamboly_token", participant.token, {
       path: "/",
       maxAge: 60 * 60 * 24 * 7,
       sameSite: "lax",
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
     });
 
     return response;

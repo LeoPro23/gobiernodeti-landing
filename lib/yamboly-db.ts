@@ -1,5 +1,6 @@
 import "server-only";
 import { getPool } from "./db";
+import { randomBytes } from "node:crypto";
 
 let yambolyEnsured = false;
 
@@ -84,6 +85,8 @@ export async function ensureYambolyTables() {
     CREATE INDEX IF NOT EXISTS idx_yamboly_participants_session ON yamboly_participants(session_id);
     CREATE INDEX IF NOT EXISTS idx_yamboly_participants_score ON yamboly_participants(score DESC, total_response_time_ms ASC);
     CREATE INDEX IF NOT EXISTS idx_yamboly_answers_question ON yamboly_answers(question_id);
+    ALTER TABLE yamboly_participants ALTER COLUMN email DROP NOT NULL, ALTER COLUMN phone DROP NOT NULL;
+    ALTER TABLE yamboly_sessions ADD COLUMN IF NOT EXISTS paused_at TIMESTAMPTZ;
   `;
 
   await pool.query(query);
@@ -350,10 +353,15 @@ export async function getYambolyParticipantsCount(sessionId = "fullday") {
 export async function getYambolyLeaderboard(sessionId = "fullday", limit = 10) {
   await ensureYambolyTables();
   const res = await getPool().query(
-    `SELECT id, full_name, score, correct_count, total_response_time_ms
-     FROM yamboly_participants
-     WHERE session_id = $1
-     ORDER BY score DESC, total_response_time_ms ASC, id ASC
+    `SELECT p.id, p.full_name, p.score, p.correct_count, p.total_response_time_ms,
+       COUNT(*) FILTER (WHERE a.is_correct AND q.difficulty = 'DIFICIL')::int AS difficult_correct,
+       COUNT(*) FILTER (WHERE a.is_correct AND q.difficulty = 'INTERMEDIA')::int AS intermediate_correct
+     FROM yamboly_participants p
+     LEFT JOIN yamboly_answers a ON a.participant_id = p.id
+     LEFT JOIN yamboly_questions q ON q.id = a.question_id
+     WHERE p.session_id = $1
+     GROUP BY p.id
+     ORDER BY p.score DESC, difficult_correct DESC, intermediate_correct DESC, p.total_response_time_ms ASC, p.id ASC
      LIMIT $2`,
     [sessionId, limit]
   );
@@ -377,44 +385,40 @@ export async function registerYambolyParticipant(data: {
 }) {
   await ensureYambolyTables();
   const sessionId = data.sessionId || "fullday";
-  const pool = getPool();
-
-  // Check if session allows registration
-  const session = await getYambolySession(sessionId);
-  if (!session) throw new Error("Sesión no encontrada");
-  if (!session.is_registration_open && !session.allow_late_entry) {
-    throw new Error("El registro para esta dinámica ya fue cerrado por el moderador.");
-  }
-
   // Format and validate
   const fullName = data.fullName.trim();
   const email = data.email.trim().toLowerCase();
   const phone = data.phone.trim();
 
   if (!fullName || fullName.length < 3) throw new Error("Por favor ingresa tu nombre completo.");
-  if (!email || !email.includes("@")) throw new Error("Por favor ingresa un correo válido.");
-  if (!phone || phone.length < 6) throw new Error("Por favor ingresa un número de teléfono válido.");
-
-  // Check if participant already exists by email in this session
-  const existing = await pool.query(
-    "SELECT id, token, full_name, email, phone, score FROM yamboly_participants WHERE session_id = $1 AND email = $2",
-    [sessionId, email]
-  );
-  if (existing.rowCount && existing.rowCount > 0) {
-    return existing.rows[0];
-  }
+  if (fullName.length > 200) throw new Error("El nombre es demasiado largo.");
+  if (email.length > 200 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error("Ingresa un correo válido.");
+  if (phone.length > 50 || !/^[+\d\s()-]{6,50}$/.test(phone) || phone.replace(/\D/g, "").length < 6) throw new Error("Ingresa un número de teléfono válido.");
 
   // Create token
-  const token = Math.random().toString(36).substring(2) + Date.now().toString(36);
+  const token = randomBytes(32).toString("hex");
 
-  const res = await pool.query(
+  const client = await getPool().connect();
+  try {
+  await client.query("BEGIN");
+  const session = (await client.query("SELECT * FROM yamboly_sessions WHERE id = $1 FOR UPDATE", [sessionId])).rows[0];
+  if (!session) throw new Error("Sesión no encontrada");
+  if (!session.is_registration_open && !session.allow_late_entry) throw new Error("El registro para esta dinámica ya fue cerrado por el moderador.");
+  const existing = await client.query("SELECT 1 FROM yamboly_participants WHERE session_id = $1 AND lower(email) = $2 LIMIT 1", [sessionId, email]);
+  if (existing.rowCount) throw new Error("Este correo ya está inscrito. Usa el navegador con el que te registraste o consulta a la organización.");
+  const res = await client.query(
     `INSERT INTO yamboly_participants (session_id, full_name, email, phone, token)
      VALUES ($1, $2, $3, $4, $5)
      RETURNING id, token, full_name, email, phone, score, correct_count`,
     [sessionId, fullName, email, phone, token]
   );
 
+  await client.query("COMMIT");
   return res.rows[0];
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally { client.release(); }
 }
 
 export async function getParticipantByToken(token: string) {
@@ -432,13 +436,18 @@ export async function submitYambolyAnswer(data: {
   selectedOptionId: string;
 }) {
   await ensureYambolyTables();
-  const pool = getPool();
-
-  const participant = await getParticipantByToken(data.token);
+  const client = await getPool().connect();
+  try {
+  await client.query("BEGIN");
+  const participantResult = await client.query("SELECT * FROM yamboly_participants WHERE token = $1", [data.token]);
+  const participant = participantResult.rows[0];
   if (!participant) throw new Error("Participante no válido o no encontrado.");
 
-  const session = await getYambolySession(participant.session_id);
+  const sessionResult = await client.query("SELECT * FROM yamboly_sessions WHERE id = $1 FOR UPDATE", [participant.session_id]);
+  const session = sessionResult.rows[0];
   if (!session) throw new Error("Sesión no activa.");
+
+  if (session.paused_at) throw new Error("La partida está pausada.");
 
   if (session.status !== "QUESTION_ANSWERING") {
     throw new Error("El tiempo de respuesta para esta pregunta no está activo.");
@@ -451,9 +460,12 @@ export async function submitYambolyAnswer(data: {
   // Calculate elapsed time from answering_start_time
   const startTime = session.answering_start_time ? new Date(session.answering_start_time).getTime() : Date.now();
   const responseTimeMs = Math.max(0, Date.now() - startTime);
+  if (!session.answering_start_time || responseTimeMs >= session.answering_duration_sec * 1000) {
+    throw new Error("El tiempo de respuesta ha terminado.");
+  }
 
   // Check if already answered
-  const existingAnswer = await pool.query(
+  const existingAnswer = await client.query(
     "SELECT id FROM yamboly_answers WHERE participant_id = $1 AND question_id = $2",
     [participant.id, data.questionId]
   );
@@ -462,20 +474,23 @@ export async function submitYambolyAnswer(data: {
   }
 
   // Check correctness
-  const qRes = await pool.query(
-    "SELECT correct_option_id FROM yamboly_questions WHERE id = $1",
+  const qRes = await client.query(
+    "SELECT correct_option_id, options FROM yamboly_questions WHERE id = $1",
     [data.questionId]
   );
   if (!qRes.rowCount || qRes.rowCount === 0) throw new Error("Pregunta no encontrada.");
   
   const correctOption = qRes.rows[0].correct_option_id;
+  if (!qRes.rows[0].options.some((option: { id: string }) => option.id === data.selectedOptionId.trim().toUpperCase())) {
+    throw new Error("La alternativa seleccionada no es válida.");
+  }
   const isCorrect = data.selectedOptionId.trim().toUpperCase() === correctOption.toUpperCase();
 
   // Points rule: 4 points per correct answer, 0 for error
   const pointsAwarded = isCorrect ? 4 : 0;
 
   // Insert answer
-  await pool.query(
+  await client.query(
     `INSERT INTO yamboly_answers 
       (session_id, participant_id, question_id, round_number, selected_option_id, is_correct, response_time_ms)
      VALUES ($1, $2, $3, $4, $5, $6, $7)`,
@@ -492,7 +507,7 @@ export async function submitYambolyAnswer(data: {
 
   // Update participant stats
   if (isCorrect) {
-    await pool.query(
+    await client.query(
       `UPDATE yamboly_participants 
        SET score = score + $1,
            correct_count = correct_count + 1,
@@ -502,12 +517,14 @@ export async function submitYambolyAnswer(data: {
     );
   }
 
-  return {
-    submitted: true,
-    isCorrect,
-    pointsAwarded,
-    responseTimeMs,
-  };
+  await client.query("COMMIT");
+  return { submitted: true };
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 // ----------------- Moderator Action Controller -----------------
@@ -523,17 +540,45 @@ export async function executeModeratorAction(action: {
     | "REVEAL_ANSWER"
     | "SHOW_ROUND_RANKING"
     | "SHOW_PODIUM"
-    | "RESET_GAME";
+    | "RESET_GAME" | "PAUSE" | "RESUME";
   categoryId?: number;
   questionId?: number;
 }) {
   await ensureYambolyTables();
   const sessionId = action.sessionId || "fullday";
-  const pool = getPool();
-  const session = await getYambolySession(sessionId);
+  const pool = await getPool().connect();
+  try {
+  await pool.query("BEGIN");
+  const session = (await pool.query("SELECT * FROM yamboly_sessions WHERE id = $1 FOR UPDATE", [sessionId])).rows[0];
   if (!session) throw new Error("Sesión no encontrada.");
 
+  const allowed: Record<string, string[]> = {
+    OPEN_REGISTRATION: ["WAITING_REGISTRATION"], CLOSE_REGISTRATION: ["WAITING_REGISTRATION"],
+    SPIN_ROULETTE: ["WAITING_REGISTRATION", "ROUND_RANKING"], START_READING: ["ROULETTE"],
+    START_ANSWERING: ["QUESTION_READING"], REVEAL_ANSWER: ["QUESTION_ANSWERING"],
+    SHOW_ROUND_RANKING: ["QUESTION_REVEAL"], SHOW_PODIUM: ["ROUND_RANKING"],
+    RESET_GAME: ["WAITING_REGISTRATION", "PODIUM"],
+    PAUSE: ["ROULETTE", "QUESTION_READING", "QUESTION_ANSWERING", "QUESTION_REVEAL", "ROUND_RANKING"],
+    RESUME: ["ROULETTE", "QUESTION_READING", "QUESTION_ANSWERING", "QUESTION_REVEAL", "ROUND_RANKING"],
+  };
+  if (!allowed[action.type]?.includes(session.status)) throw new Error("Acción no permitida en esta etapa.");
+  if (session.paused_at && action.type !== "RESUME") throw new Error("Reanuda la partida antes de continuar.");
+  if (!session.paused_at && action.type === "RESUME") throw new Error("La partida no está pausada.");
+  if (action.type === "SPIN_ROULETTE" && session.current_round >= session.total_rounds) throw new Error("La partida ya completó sus rondas.");
+  if (action.type === "SHOW_PODIUM" && session.current_round < session.total_rounds) throw new Error("Aún quedan rondas por jugar.");
+
   switch (action.type) {
+    case "PAUSE": {
+      await pool.query("UPDATE yamboly_sessions SET paused_at = clock_timestamp(), updated_at = NOW() WHERE id = $1", [sessionId]);
+      break;
+    }
+    case "RESUME": {
+      await pool.query(`UPDATE yamboly_sessions SET
+        reading_start_time = CASE WHEN status = 'QUESTION_READING' THEN reading_start_time + (clock_timestamp() - paused_at) ELSE reading_start_time END,
+        answering_start_time = CASE WHEN status = 'QUESTION_ANSWERING' THEN answering_start_time + (clock_timestamp() - paused_at) ELSE answering_start_time END,
+        paused_at = NULL, updated_at = NOW() WHERE id = $1`, [sessionId]);
+      break;
+    }
     case "OPEN_REGISTRATION": {
       await pool.query(
         "UPDATE yamboly_sessions SET is_registration_open = TRUE, status = 'WAITING_REGISTRATION', updated_at = NOW() WHERE id = $1",
@@ -550,40 +595,43 @@ export async function executeModeratorAction(action: {
     }
     case "SPIN_ROULETTE": {
       // Pick next category and an unused question
+      if (session.current_round === 0) {
+        const counts = await pool.query(
+          `SELECT difficulty, COUNT(*)::int AS count FROM yamboly_questions WHERE used = FALSE GROUP BY difficulty`
+        );
+        const available = new Map<string, number>(counts.rows.map((row: { difficulty: string; count: number }) => [row.difficulty, row.count]));
+        if ((available.get("FACIL") || 0) < 1 || (available.get("INTERMEDIA") || 0) < 2 || (available.get("DIFICIL") || 0) < 2) {
+          throw new Error("Se requieren preguntas disponibles: 1 fácil, 2 intermedias y 2 difíciles.");
+        }
+      }
+      const difficulty = ["FACIL", "INTERMEDIA", "INTERMEDIA", "DIFICIL", "DIFICIL"][session.current_round];
+      if (!difficulty) throw new Error("No hay dificultad configurada para esta ronda.");
       let chosenCatId = action.categoryId;
       if (!chosenCatId) {
         // Pick random category that has unused questions
         const catRes = await pool.query(
           `SELECT c.id FROM yamboly_categories c
-           WHERE EXISTS (SELECT 1 FROM yamboly_questions q WHERE q.category_id = c.id AND q.used = FALSE)
-           ORDER BY RANDOM() LIMIT 1`
+           WHERE EXISTS (SELECT 1 FROM yamboly_questions q WHERE q.category_id = c.id AND q.used = FALSE AND q.difficulty = $1)
+           ORDER BY RANDOM() LIMIT 1`, [difficulty]
         );
         if (catRes.rowCount && catRes.rowCount > 0) {
           chosenCatId = catRes.rows[0].id;
         } else {
-          // If all used, reset questions
-          await pool.query("UPDATE yamboly_questions SET used = FALSE");
-          const fallbackCat = await pool.query("SELECT id FROM yamboly_categories ORDER BY RANDOM() LIMIT 1");
-          chosenCatId = fallbackCat.rows[0]?.id;
+          throw new Error(`No hay preguntas disponibles para la dificultad ${difficulty}.`);
         }
       }
 
       // Pick question from this category
       const qRes = await pool.query(
         `SELECT id FROM yamboly_questions 
-         WHERE category_id = $1 AND used = FALSE 
+         WHERE category_id = $1 AND used = FALSE AND difficulty = $2
          ORDER BY RANDOM() LIMIT 1`,
-        [chosenCatId]
+        [chosenCatId, difficulty]
       );
 
       let questionId = qRes.rows[0]?.id;
       if (!questionId) {
-        // Fallback pick any question in category
-        const anyQ = await pool.query(
-          "SELECT id FROM yamboly_questions WHERE category_id = $1 ORDER BY RANDOM() LIMIT 1",
-          [chosenCatId]
-        );
-        questionId = anyQ.rows[0]?.id;
+        throw new Error("La categoría no tiene preguntas elegibles para esta ronda.");
       }
 
       if (questionId) {
@@ -648,6 +696,15 @@ export async function executeModeratorAction(action: {
       break;
     }
     case "SHOW_PODIUM": {
+      const ranking = await getYambolyLeaderboard(sessionId, 2147483647);
+      for (let i = 0; i < Math.min(3, ranking.length - 1); i++) {
+        const a = ranking[i], b = ranking[i + 1];
+        if (a.score === b.score && a.difficult_correct === b.difficult_correct &&
+            a.intermediate_correct === b.intermediate_correct &&
+            Math.abs(a.total_response_time_ms - b.total_response_time_ms) < 1000) {
+          throw new Error("Hay un empate técnico que afecta el podio; debe resolverse antes de publicar ganadores.");
+        }
+      }
       await pool.query(
         `UPDATE yamboly_sessions 
          SET status = 'PODIUM',
@@ -678,5 +735,11 @@ export async function executeModeratorAction(action: {
     }
   }
 
-  return await getYambolySession(sessionId);
+  const updated = (await pool.query("SELECT * FROM yamboly_sessions WHERE id = $1", [sessionId])).rows[0];
+  await pool.query("COMMIT");
+  return updated;
+  } catch (error) {
+    await pool.query("ROLLBACK");
+    throw error;
+  } finally { pool.release(); }
 }
