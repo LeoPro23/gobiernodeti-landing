@@ -189,16 +189,16 @@ export async function findRegistrationByDni(dni: string) {
   return result.rows[0] ?? null;
 }
 
-export async function findLatestCertificatePayment(registrationId: number) {
+export async function findCurrentCertificatePayment(registrationId: number) {
   await ensureRegistrationTable();
 
-  const result = await getPool().query(
+  const result = await getPool().query<{ status: CertificatePaymentStatus }>(
     `
-      SELECT id, registration_id, bucket, object_key, operation_number,
-        content_type, file_size, status, created_at
+      SELECT status
       FROM registration_payment_images
       WHERE registration_id = $1
-      ORDER BY created_at DESC, id DESC
+      ORDER BY CASE status WHEN 'valid' THEN 0 WHEN 'pending' THEN 1 ELSE 2 END,
+        created_at DESC NULLS LAST, id DESC
       LIMIT 1;
     `,
     [registrationId],
