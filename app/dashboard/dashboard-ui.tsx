@@ -1,12 +1,13 @@
 import Link from "next/link"
-import { ArrowLeft, ArrowRight, FileBadge, Search, SlidersHorizontal, Users } from "lucide-react"
+import { ArrowLeft, ArrowRight, FileBadge, Search, SlidersHorizontal, Ticket, Users } from "lucide-react"
 import { activeFilterEntries, adminPageUrl, PAGE_SIZE, type AdminFilters, type FilterOptions } from "@/lib/admin-registrations"
 
-export function DashboardTabs({ certificates = false }: { certificates?: boolean }) {
+export function DashboardTabs({ certificates = false, yamboly = false }: { certificates?: boolean; yamboly?: boolean }) {
   return <nav className="admin-tabs" aria-label="Secciones de administración">
-    <Link href="/dashboard" aria-current={!certificates ? "page" : undefined}><Users size={18} aria-hidden="true" /> Inscritos</Link>
+    <Link href="/dashboard" aria-current={!certificates && !yamboly ? "page" : undefined}><Users size={18} aria-hidden="true" /> Inscritos</Link>
     <Link href="/dashboard/certificados" aria-current={certificates ? "page" : undefined}><FileBadge size={18} aria-hidden="true" /> Certificados</Link>
-    <span>Consulta de registros del evento</span>
+    <Link href="/dashboard/yamboly" aria-current={yamboly ? "page" : undefined}><Ticket size={18} aria-hidden="true" /> Quiz Yámboly</Link>
+    <span>{yamboly ? "Configuración de la dinámica" : "Consulta de registros del evento"}</span>
   </nav>
 }
 

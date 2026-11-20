@@ -1,6 +1,19 @@
 import "server-only";
+import type { Pool, PoolClient } from "pg";
 import { getPool } from "./db";
 import { randomBytes } from "node:crypto";
+import {
+  DEFAULT_SETTINGS,
+  rankParticipants,
+  relevantTieGroups,
+  requiredByDifficulty,
+  type RankInput,
+  type TiebreakRoundResult,
+} from "./yamboly-rules";
+
+type Queryable = Pool | PoolClient;
+
+export const SESSION_ID = "fullday";
 
 let yambolyEnsured = false;
 
@@ -87,6 +100,60 @@ export async function ensureYambolyTables() {
     CREATE INDEX IF NOT EXISTS idx_yamboly_answers_question ON yamboly_answers(question_id);
     ALTER TABLE yamboly_participants ALTER COLUMN email DROP NOT NULL, ALTER COLUMN phone DROP NOT NULL;
     ALTER TABLE yamboly_sessions ADD COLUMN IF NOT EXISTS paused_at TIMESTAMPTZ;
+
+    -- Parámetros configurables desde la administración.
+    ALTER TABLE yamboly_sessions
+      ADD COLUMN IF NOT EXISTS points_per_correct INTEGER NOT NULL DEFAULT 4,
+      ADD COLUMN IF NOT EXISTS tie_threshold_ms INTEGER NOT NULL DEFAULT 1000,
+      ADD COLUMN IF NOT EXISTS difficulty_sequence TEXT[] NOT NULL DEFAULT ARRAY['FACIL','INTERMEDIA','INTERMEDIA','DIFICIL','DIFICIL'],
+      ADD COLUMN IF NOT EXISTS tiebreak_round INTEGER NOT NULL DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS tiebreak_participant_ids INTEGER[] NOT NULL DEFAULT '{}';
+    ALTER TABLE yamboly_categories ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT TRUE;
+    ALTER TABLE yamboly_questions
+      ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT TRUE,
+      ADD COLUMN IF NOT EXISTS is_tiebreaker BOOLEAN NOT NULL DEFAULT FALSE,
+      ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ;
+    ALTER TABLE yamboly_prizes
+      ADD COLUMN IF NOT EXISTS units INTEGER NOT NULL DEFAULT 1,
+      ADD COLUMN IF NOT EXISTS conditions TEXT;
+
+    -- Desempate: cada pregunta adicional y los participantes que la disputan.
+    CREATE TABLE IF NOT EXISTS yamboly_tiebreak_rounds (
+      session_id VARCHAR(50) NOT NULL REFERENCES yamboly_sessions(id) ON DELETE CASCADE,
+      round INTEGER NOT NULL,
+      question_id INTEGER NOT NULL REFERENCES yamboly_questions(id),
+      participant_ids INTEGER[] NOT NULL,
+      closed_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (session_id, round)
+    );
+    CREATE TABLE IF NOT EXISTS yamboly_tiebreak_answers (
+      id SERIAL PRIMARY KEY,
+      session_id VARCHAR(50) NOT NULL,
+      round INTEGER NOT NULL,
+      participant_id INTEGER NOT NULL REFERENCES yamboly_participants(id) ON DELETE CASCADE,
+      question_id INTEGER NOT NULL REFERENCES yamboly_questions(id),
+      selected_option_id VARCHAR(10) NOT NULL,
+      is_correct BOOLEAN NOT NULL,
+      response_time_ms INTEGER NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+      CONSTRAINT uq_yamboly_tiebreak_answer UNIQUE (session_id, round, participant_id)
+    );
+
+    -- Historial de cambios de configuración y acciones del moderador.
+    CREATE TABLE IF NOT EXISTS yamboly_audit_log (
+      id BIGSERIAL PRIMARY KEY,
+      session_id VARCHAR(50) NOT NULL,
+      actor VARCHAR(200) NOT NULL,
+      action VARCHAR(60) NOT NULL,
+      entity_type VARCHAR(30) NOT NULL,
+      entity_id VARCHAR(50),
+      summary TEXT NOT NULL,
+      details JSONB,
+      during_game BOOLEAN NOT NULL DEFAULT FALSE,
+      created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_yamboly_audit_created ON yamboly_audit_log(created_at DESC);
   `;
 
   await pool.query(query);
@@ -98,15 +165,19 @@ export async function ensureYambolyTables() {
     ON CONFLICT (id) DO NOTHING;
   `);
 
-  // Seed default prizes
-  await pool.query(`
-    INSERT INTO yamboly_prizes (session_id, place, title, description, image_url)
-    VALUES 
-      ('fullday', 1, '1er Puesto: Super Pack Yámboly Campeón', 'Pack familiar de helados y postres Yámboly + merchandising oficial + diploma de excelencia', '/images/yamboly/premio-1.webp'),
-      ('fullday', 2, '2do Puesto: Pack Yámboly Silver', 'Pack surtido premium de helados Yámboly + merchandising', '/images/yamboly/premio-2.webp'),
-      ('fullday', 3, '3er Puesto: Pack Yámboly Bronze', 'Caja degustación de helados Yámboly', '/images/yamboly/premio-3.webp')
-    ON CONFLICT (session_id, place) DO NOTHING;
-  `);
+  // Seed default prizes only for a brand-new installation (the admin may delete them later).
+  const prizeCount = await pool.query("SELECT COUNT(*) FROM yamboly_prizes");
+  const auditCount = await pool.query("SELECT COUNT(*) FROM yamboly_audit_log WHERE entity_type = 'prize'");
+  if (parseInt(prizeCount.rows[0].count, 10) === 0 && parseInt(auditCount.rows[0].count, 10) === 0) {
+    await pool.query(`
+      INSERT INTO yamboly_prizes (session_id, place, title, description, image_url)
+      VALUES
+        ('fullday', 1, '1er Puesto: Super Pack Yámboly Campeón', 'Pack familiar de helados y postres Yámboly + merchandising oficial + diploma de excelencia', '/images/yamboly/premio-1.webp'),
+        ('fullday', 2, '2do Puesto: Pack Yámboly Silver', 'Pack surtido premium de helados Yámboly + merchandising', '/images/yamboly/premio-2.webp'),
+        ('fullday', 3, '3er Puesto: Pack Yámboly Bronze', 'Caja degustación de helados Yámboly', '/images/yamboly/premio-3.webp')
+      ON CONFLICT (session_id, place) DO NOTHING;
+    `);
+  }
 
   // Seed default categories and questions if none exist
   const catCount = await pool.query("SELECT COUNT(*) FROM yamboly_categories");
@@ -118,7 +189,7 @@ export async function ensureYambolyTables() {
 }
 
 // Initial seed data based on the congress themes
-async function seedInitialQuizData(pool: any) {
+async function seedInitialQuizData(pool: Queryable) {
   const categories = [
     { name: "Gobierno de TI & COBIT", color: "#006ff5", icon: "Building2" },
     { name: "Ciberseguridad & Resiliencia", color: "#ae1df5", icon: "ShieldAlert" },
@@ -287,9 +358,9 @@ async function seedInitialQuizData(pool: any) {
 }
 
 async function insertQuestion(
-  pool: any,
+  pool: Queryable,
   categoryId: number,
-  q: { text: string; options: any[]; correct: string; difficulty: string }
+  q: { text: string; options: { id: string; text: string }[]; correct: string; difficulty: string }
 ) {
   await pool.query(
     `INSERT INTO yamboly_questions (category_id, text, options, correct_option_id, difficulty)
@@ -300,7 +371,34 @@ async function insertQuestion(
 
 // ----------------- Data Access Functions -----------------
 
-export async function getYambolySession(sessionId = "fullday") {
+export type YambolySession = {
+  id: string;
+  status: string;
+  current_round: number;
+  total_rounds: number;
+  current_category_id: number | null;
+  current_question_id: number | null;
+  reading_start_time: string | null;
+  reading_duration_sec: number;
+  answering_start_time: string | null;
+  answering_duration_sec: number;
+  is_registration_open: boolean;
+  allow_late_entry: boolean;
+  paused_at: string | null;
+  points_per_correct: number;
+  tie_threshold_ms: number;
+  difficulty_sequence: string[];
+  tiebreak_round: number;
+  tiebreak_participant_ids: number[];
+  updated_at: string;
+};
+
+/** La partida empezó (o terminó sin reiniciarse): reglas y preguntas usadas quedan bloqueadas. */
+export function isGameStarted(session: Pick<YambolySession, "status" | "current_round">) {
+  return session.status !== "WAITING_REGISTRATION" || session.current_round > 0;
+}
+
+export async function getYambolySession(sessionId = SESSION_ID): Promise<YambolySession | null> {
   await ensureYambolyTables();
   const res = await getPool().query(
     "SELECT * FROM yamboly_sessions WHERE id = $1",
@@ -309,10 +407,10 @@ export async function getYambolySession(sessionId = "fullday") {
   return res.rows[0] || null;
 }
 
-export async function getYambolyCategories() {
+export async function getYambolyCategories({ activeOnly = false } = {}) {
   await ensureYambolyTables();
   const res = await getPool().query(
-    "SELECT * FROM yamboly_categories ORDER BY id ASC"
+    `SELECT * FROM yamboly_categories ${activeOnly ? "WHERE active = TRUE" : ""} ORDER BY id ASC`
   );
   return res.rows;
 }
@@ -320,7 +418,7 @@ export async function getYambolyCategories() {
 export async function getYambolyQuestions() {
   await ensureYambolyTables();
   const res = await getPool().query(
-    `SELECT q.*, c.name as category_name, c.color as category_color 
+    `SELECT q.*, c.name as category_name, c.color as category_color
      FROM yamboly_questions q
      JOIN yamboly_categories c ON q.category_id = c.id
      ORDER BY q.id ASC`
@@ -331,7 +429,7 @@ export async function getYambolyQuestions() {
 export async function getYambolyCurrentQuestion(questionId: number) {
   await ensureYambolyTables();
   const res = await getPool().query(
-    `SELECT q.id, q.category_id, q.text, q.options, q.difficulty, q.correct_option_id,
+    `SELECT q.id, q.category_id, q.text, q.options, q.difficulty, q.correct_option_id, q.is_tiebreaker,
             c.name as category_name, c.color as category_color
      FROM yamboly_questions q
      JOIN yamboly_categories c ON q.category_id = c.id
@@ -341,7 +439,7 @@ export async function getYambolyCurrentQuestion(questionId: number) {
   return res.rows[0] || null;
 }
 
-export async function getYambolyParticipantsCount(sessionId = "fullday") {
+export async function getYambolyParticipantsCount(sessionId = SESSION_ID) {
   await ensureYambolyTables();
   const res = await getPool().query(
     "SELECT COUNT(*) as count FROM yamboly_participants WHERE session_id = $1",
@@ -350,9 +448,44 @@ export async function getYambolyParticipantsCount(sessionId = "fullday") {
   return parseInt(res.rows[0]?.count || "0", 10);
 }
 
-export async function getYambolyLeaderboard(sessionId = "fullday", limit = 10) {
+/** Preguntas de desempate ya cerradas (reveladas); las abiertas aún no cambian la clasificación. */
+async function getClosedTiebreakRounds(db: Queryable, sessionId: string): Promise<TiebreakRoundResult[]> {
+  const res = await db.query(
+    `SELECT r.round, r.participant_ids, a.participant_id, a.is_correct, a.response_time_ms
+     FROM yamboly_tiebreak_rounds r
+     LEFT JOIN yamboly_tiebreak_answers a ON a.session_id = r.session_id AND a.round = r.round
+     WHERE r.session_id = $1 AND r.closed_at IS NOT NULL
+     ORDER BY r.round ASC`,
+    [sessionId]
+  );
+  const rounds = new Map<number, TiebreakRoundResult>();
+  for (const row of res.rows) {
+    let round = rounds.get(row.round);
+    if (!round) {
+      round = { round: row.round, contenderIds: row.participant_ids, answers: new Map() };
+      rounds.set(row.round, round);
+    }
+    if (row.participant_id !== null) {
+      round.answers.set(row.participant_id, { isCorrect: row.is_correct, responseTimeMs: row.response_time_ms });
+    }
+  }
+  return [...rounds.values()];
+}
+
+export async function getYambolyPrizes(sessionId = SESSION_ID, db?: Queryable) {
   await ensureYambolyTables();
-  const res = await getPool().query(
+  const res = await (db ?? getPool()).query(
+    "SELECT * FROM yamboly_prizes WHERE session_id = $1 ORDER BY place ASC",
+    [sessionId]
+  );
+  return res.rows;
+}
+
+/** Clasificación completa con empates técnicos y desempates ya resueltos. */
+export async function getYambolyRanking(sessionId = SESSION_ID, db?: Queryable) {
+  await ensureYambolyTables();
+  const client = db ?? getPool();
+  const participantsQuery = () => client.query(
     `SELECT p.id, p.full_name, p.score, p.correct_count, p.total_response_time_ms,
        COUNT(*) FILTER (WHERE a.is_correct AND q.difficulty = 'DIFICIL')::int AS difficult_correct,
        COUNT(*) FILTER (WHERE a.is_correct AND q.difficulty = 'INTERMEDIA')::int AS intermediate_correct
@@ -360,21 +493,54 @@ export async function getYambolyLeaderboard(sessionId = "fullday", limit = 10) {
      LEFT JOIN yamboly_answers a ON a.participant_id = p.id
      LEFT JOIN yamboly_questions q ON q.id = a.question_id
      WHERE p.session_id = $1
-     GROUP BY p.id
-     ORDER BY p.score DESC, difficult_correct DESC, intermediate_correct DESC, p.total_response_time_ms ASC, p.id ASC
-     LIMIT $2`,
-    [sessionId, limit]
-  );
-  return res.rows;
-}
-
-export async function getYambolyPrizes(sessionId = "fullday") {
-  await ensureYambolyTables();
-  const res = await getPool().query(
-    "SELECT * FROM yamboly_prizes WHERE session_id = $1 ORDER BY place ASC",
+     GROUP BY p.id`,
     [sessionId]
   );
-  return res.rows;
+  const sessionQuery = () => client.query("SELECT tie_threshold_ms FROM yamboly_sessions WHERE id = $1", [sessionId]);
+  const prizesQuery = () => client.query("SELECT COUNT(*)::int AS count FROM yamboly_prizes WHERE session_id = $1", [sessionId]);
+
+  // Una conexión dentro de una transacción no admite consultas simultáneas; el pool sí.
+  const [rows, session, rounds, prizes] = db
+    ? [await participantsQuery(), await sessionQuery(), await getClosedTiebreakRounds(client, sessionId), await prizesQuery()]
+    : await Promise.all([participantsQuery(), sessionQuery(), getClosedTiebreakRounds(client, sessionId), prizesQuery()]);
+  const threshold = session.rows[0]?.tie_threshold_ms ?? DEFAULT_SETTINGS.tieThresholdMs;
+  const prizePlaces = prizes.rows[0]?.count ?? 0;
+  const { ranking, tieGroups } = rankParticipants(rows.rows as RankInput[], rounds, threshold);
+  return { ranking, tieGroups, relevantTies: relevantTieGroups(tieGroups, prizePlaces), prizePlaces };
+}
+
+export async function getYambolyLeaderboard(sessionId = SESSION_ID, limit = 10) {
+  const { ranking } = await getYambolyRanking(sessionId);
+  return ranking.slice(0, limit);
+}
+
+export async function logYambolyAudit(
+  db: Queryable,
+  entry: {
+    sessionId?: string;
+    actor: string;
+    action: string;
+    entityType: string;
+    entityId?: string | number | null;
+    summary: string;
+    details?: unknown;
+    duringGame: boolean;
+  }
+) {
+  await db.query(
+    `INSERT INTO yamboly_audit_log (session_id, actor, action, entity_type, entity_id, summary, details, during_game)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+    [
+      entry.sessionId ?? SESSION_ID,
+      entry.actor.slice(0, 200),
+      entry.action,
+      entry.entityType,
+      entry.entityId == null ? null : String(entry.entityId),
+      entry.summary,
+      entry.details === undefined ? null : JSON.stringify(entry.details),
+      entry.duringGame,
+    ]
+  );
 }
 
 export async function registerYambolyParticipant(data: {
@@ -384,7 +550,7 @@ export async function registerYambolyParticipant(data: {
   phone: string;
 }) {
   await ensureYambolyTables();
-  const sessionId = data.sessionId || "fullday";
+  const sessionId = data.sessionId || SESSION_ID;
   // Format and validate
   const fullName = data.fullName.trim();
   const email = data.email.trim().toLowerCase();
@@ -404,6 +570,7 @@ export async function registerYambolyParticipant(data: {
   const session = (await client.query("SELECT * FROM yamboly_sessions WHERE id = $1 FOR UPDATE", [sessionId])).rows[0];
   if (!session) throw new Error("Sesión no encontrada");
   if (!session.is_registration_open && !session.allow_late_entry) throw new Error("El registro para esta dinámica ya fue cerrado por el moderador.");
+  if (session.tiebreak_round > 0 || session.status === "TIEBREAK" || session.status === "PODIUM") throw new Error("La dinámica ya está en su etapa final.");
   const existing = await client.query("SELECT 1 FROM yamboly_participants WHERE session_id = $1 AND lower(email) = $2 LIMIT 1", [sessionId, email]);
   if (existing.rowCount) throw new Error("Este correo ya está inscrito. Usa el navegador con el que te registraste o consulta a la organización.");
   const res = await client.query(
@@ -444,7 +611,7 @@ export async function submitYambolyAnswer(data: {
   if (!participant) throw new Error("Participante no válido o no encontrado.");
 
   const sessionResult = await client.query("SELECT * FROM yamboly_sessions WHERE id = $1 FOR UPDATE", [participant.session_id]);
-  const session = sessionResult.rows[0];
+  const session = sessionResult.rows[0] as YambolySession | undefined;
   if (!session) throw new Error("Sesión no activa.");
 
   if (session.paused_at) throw new Error("La partida está pausada.");
@@ -457,6 +624,11 @@ export async function submitYambolyAnswer(data: {
     throw new Error("La pregunta respondida no coincide con la ronda activa.");
   }
 
+  const isTiebreak = session.tiebreak_round > 0;
+  if (isTiebreak && !session.tiebreak_participant_ids.includes(participant.id)) {
+    throw new Error("Esta pregunta de desempate es solo para los participantes empatados.");
+  }
+
   // Calculate elapsed time from answering_start_time
   const startTime = session.answering_start_time ? new Date(session.answering_start_time).getTime() : Date.now();
   const responseTimeMs = Math.max(0, Date.now() - startTime);
@@ -465,10 +637,15 @@ export async function submitYambolyAnswer(data: {
   }
 
   // Check if already answered
-  const existingAnswer = await client.query(
-    "SELECT id FROM yamboly_answers WHERE participant_id = $1 AND question_id = $2",
-    [participant.id, data.questionId]
-  );
+  const existingAnswer = isTiebreak
+    ? await client.query(
+        "SELECT id FROM yamboly_tiebreak_answers WHERE session_id = $1 AND round = $2 AND participant_id = $3",
+        [session.id, session.tiebreak_round, participant.id]
+      )
+    : await client.query(
+        "SELECT id FROM yamboly_answers WHERE participant_id = $1 AND question_id = $2",
+        [participant.id, data.questionId]
+      );
   if (existingAnswer.rowCount && existingAnswer.rowCount > 0) {
     throw new Error("Ya enviaste tu respuesta para esta ronda.");
   }
@@ -479,19 +656,32 @@ export async function submitYambolyAnswer(data: {
     [data.questionId]
   );
   if (!qRes.rowCount || qRes.rowCount === 0) throw new Error("Pregunta no encontrada.");
-  
+
+  const selected = data.selectedOptionId.trim().toUpperCase();
   const correctOption = qRes.rows[0].correct_option_id;
-  if (!qRes.rows[0].options.some((option: { id: string }) => option.id === data.selectedOptionId.trim().toUpperCase())) {
+  if (!qRes.rows[0].options.some((option: { id: string }) => option.id === selected)) {
     throw new Error("La alternativa seleccionada no es válida.");
   }
-  const isCorrect = data.selectedOptionId.trim().toUpperCase() === correctOption.toUpperCase();
+  const isCorrect = selected === correctOption.toUpperCase();
 
-  // Points rule: 4 points per correct answer, 0 for error
-  const pointsAwarded = isCorrect ? 4 : 0;
+  if (isTiebreak) {
+    // El desempate no suma puntos: solo ordena a los participantes empatados.
+    await client.query(
+      `INSERT INTO yamboly_tiebreak_answers
+        (session_id, round, participant_id, question_id, selected_option_id, is_correct, response_time_ms)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [session.id, session.tiebreak_round, participant.id, data.questionId, selected, isCorrect, responseTimeMs]
+    );
+    await client.query("COMMIT");
+    return { submitted: true };
+  }
+
+  // Points rule: configurable points per correct answer, 0 for error
+  const pointsAwarded = isCorrect ? session.points_per_correct : 0;
 
   // Insert answer
   await client.query(
-    `INSERT INTO yamboly_answers 
+    `INSERT INTO yamboly_answers
       (session_id, participant_id, question_id, round_number, selected_option_id, is_correct, response_time_ms)
      VALUES ($1, $2, $3, $4, $5, $6, $7)`,
     [
@@ -499,7 +689,7 @@ export async function submitYambolyAnswer(data: {
       participant.id,
       data.questionId,
       session.current_round,
-      data.selectedOptionId.trim().toUpperCase(),
+      selected,
       isCorrect,
       responseTimeMs,
     ]
@@ -508,7 +698,7 @@ export async function submitYambolyAnswer(data: {
   // Update participant stats
   if (isCorrect) {
     await client.query(
-      `UPDATE yamboly_participants 
+      `UPDATE yamboly_participants
        SET score = score + $1,
            correct_count = correct_count + 1,
            total_response_time_ms = total_response_time_ms + $2
@@ -529,43 +719,76 @@ export async function submitYambolyAnswer(data: {
 
 // ----------------- Moderator Action Controller -----------------
 
+export type ModeratorActionType =
+  | "OPEN_REGISTRATION"
+  | "CLOSE_REGISTRATION"
+  | "SPIN_ROULETTE"
+  | "START_READING"
+  | "START_ANSWERING"
+  | "REVEAL_ANSWER"
+  | "SHOW_ROUND_RANKING"
+  | "SHOW_PODIUM"
+  | "PREPARE_TIEBREAK"
+  | "START_TIEBREAK_QUESTION"
+  | "RESET_GAME"
+  | "PAUSE"
+  | "RESUME";
+
+const ACTION_SUMMARIES: Record<ModeratorActionType, string> = {
+  OPEN_REGISTRATION: "Abrió la inscripción",
+  CLOSE_REGISTRATION: "Cerró la inscripción",
+  SPIN_ROULETTE: "Giró la ruleta",
+  START_READING: "Mostró la pregunta (lectura)",
+  START_ANSWERING: "Habilitó las respuestas",
+  REVEAL_ANSWER: "Reveló la respuesta correcta",
+  SHOW_ROUND_RANKING: "Mostró la clasificación",
+  SHOW_PODIUM: "Publicó el podio final",
+  PREPARE_TIEBREAK: "Anunció un desempate",
+  START_TIEBREAK_QUESTION: "Lanzó una pregunta de desempate",
+  RESET_GAME: "Reinició la partida (borró respuestas y puntajes)",
+  PAUSE: "Pausó la partida",
+  RESUME: "Reanudó la partida",
+};
+
+const ACTIVE_STAGES = ["ROULETTE", "QUESTION_READING", "QUESTION_ANSWERING", "QUESTION_REVEAL", "ROUND_RANKING", "TIEBREAK"];
+
+const ALLOWED_STAGES: Record<ModeratorActionType, string[]> = {
+  OPEN_REGISTRATION: ["WAITING_REGISTRATION"],
+  CLOSE_REGISTRATION: ["WAITING_REGISTRATION"],
+  SPIN_ROULETTE: ["WAITING_REGISTRATION", "ROUND_RANKING"],
+  START_READING: ["ROULETTE"],
+  START_ANSWERING: ["QUESTION_READING"],
+  REVEAL_ANSWER: ["QUESTION_ANSWERING"],
+  SHOW_ROUND_RANKING: ["QUESTION_REVEAL"],
+  SHOW_PODIUM: ["ROUND_RANKING"],
+  PREPARE_TIEBREAK: ["ROUND_RANKING"],
+  START_TIEBREAK_QUESTION: ["TIEBREAK"],
+  RESET_GAME: ["WAITING_REGISTRATION", "PODIUM"],
+  PAUSE: ACTIVE_STAGES,
+  RESUME: ACTIVE_STAGES,
+};
+
 export async function executeModeratorAction(action: {
   sessionId?: string;
-  type: 
-    | "OPEN_REGISTRATION"
-    | "CLOSE_REGISTRATION"
-    | "SPIN_ROULETTE"
-    | "START_READING"
-    | "START_ANSWERING"
-    | "REVEAL_ANSWER"
-    | "SHOW_ROUND_RANKING"
-    | "SHOW_PODIUM"
-    | "RESET_GAME" | "PAUSE" | "RESUME";
+  type: ModeratorActionType;
   categoryId?: number;
   questionId?: number;
-}) {
+}, actor = "moderador") {
   await ensureYambolyTables();
-  const sessionId = action.sessionId || "fullday";
+  const sessionId = action.sessionId || SESSION_ID;
   const pool = await getPool().connect();
   try {
   await pool.query("BEGIN");
-  const session = (await pool.query("SELECT * FROM yamboly_sessions WHERE id = $1 FOR UPDATE", [sessionId])).rows[0];
+  const session = (await pool.query("SELECT * FROM yamboly_sessions WHERE id = $1 FOR UPDATE", [sessionId])).rows[0] as YambolySession | undefined;
   if (!session) throw new Error("Sesión no encontrada.");
 
-  const allowed: Record<string, string[]> = {
-    OPEN_REGISTRATION: ["WAITING_REGISTRATION"], CLOSE_REGISTRATION: ["WAITING_REGISTRATION"],
-    SPIN_ROULETTE: ["WAITING_REGISTRATION", "ROUND_RANKING"], START_READING: ["ROULETTE"],
-    START_ANSWERING: ["QUESTION_READING"], REVEAL_ANSWER: ["QUESTION_ANSWERING"],
-    SHOW_ROUND_RANKING: ["QUESTION_REVEAL"], SHOW_PODIUM: ["ROUND_RANKING"],
-    RESET_GAME: ["WAITING_REGISTRATION", "PODIUM"],
-    PAUSE: ["ROULETTE", "QUESTION_READING", "QUESTION_ANSWERING", "QUESTION_REVEAL", "ROUND_RANKING"],
-    RESUME: ["ROULETTE", "QUESTION_READING", "QUESTION_ANSWERING", "QUESTION_REVEAL", "ROUND_RANKING"],
-  };
-  if (!allowed[action.type]?.includes(session.status)) throw new Error("Acción no permitida en esta etapa.");
+  if (!ALLOWED_STAGES[action.type]?.includes(session.status)) throw new Error("Acción no permitida en esta etapa.");
   if (session.paused_at && action.type !== "RESUME") throw new Error("Reanuda la partida antes de continuar.");
   if (!session.paused_at && action.type === "RESUME") throw new Error("La partida no está pausada.");
-  if (action.type === "SPIN_ROULETTE" && session.current_round >= session.total_rounds) throw new Error("La partida ya completó sus rondas.");
-  if (action.type === "SHOW_PODIUM" && session.current_round < session.total_rounds) throw new Error("Aún quedan rondas por jugar.");
+  const finished = session.current_round >= session.total_rounds;
+  if (action.type === "SPIN_ROULETTE" && (finished || session.tiebreak_round > 0)) throw new Error("La partida ya completó sus rondas.");
+  if ((action.type === "SHOW_PODIUM" || action.type === "PREPARE_TIEBREAK") && !finished) throw new Error("Aún quedan rondas por jugar.");
+  let summary = ACTION_SUMMARIES[action.type];
 
   switch (action.type) {
     case "PAUSE": {
@@ -594,24 +817,30 @@ export async function executeModeratorAction(action: {
       break;
     }
     case "SPIN_ROULETTE": {
-      // Pick next category and an unused question
+      const sequence = session.difficulty_sequence?.length ? session.difficulty_sequence : DEFAULT_SETTINGS.difficultySequence;
+      // Solo cuentan preguntas publicadas, de rondas normales y de categorías activas.
+      const eligible = `q.used = FALSE AND q.active = TRUE AND q.is_tiebreaker = FALSE
+        AND EXISTS (SELECT 1 FROM yamboly_categories c WHERE c.id = q.category_id AND c.active = TRUE)`;
       if (session.current_round === 0) {
         const counts = await pool.query(
-          `SELECT difficulty, COUNT(*)::int AS count FROM yamboly_questions WHERE used = FALSE GROUP BY difficulty`
+          `SELECT q.difficulty, COUNT(*)::int AS count FROM yamboly_questions q WHERE ${eligible} GROUP BY q.difficulty`
         );
         const available = new Map<string, number>(counts.rows.map((row: { difficulty: string; count: number }) => [row.difficulty, row.count]));
-        if ((available.get("FACIL") || 0) < 1 || (available.get("INTERMEDIA") || 0) < 2 || (available.get("DIFICIL") || 0) < 2) {
-          throw new Error("Se requieren preguntas disponibles: 1 fácil, 2 intermedias y 2 difíciles.");
+        const required = requiredByDifficulty(sequence);
+        const missing = (Object.entries(required) as [string, number][])
+          .filter(([difficulty, count]) => (available.get(difficulty) || 0) < count);
+        if (missing.length) {
+          throw new Error(`Faltan preguntas publicadas para iniciar: se necesitan ${required.FACIL} fáciles, ${required.INTERMEDIA} intermedias y ${required.DIFICIL} difíciles.`);
         }
       }
-      const difficulty = ["FACIL", "INTERMEDIA", "INTERMEDIA", "DIFICIL", "DIFICIL"][session.current_round];
+      const difficulty = sequence[session.current_round];
       if (!difficulty) throw new Error("No hay dificultad configurada para esta ronda.");
       let chosenCatId = action.categoryId;
       if (!chosenCatId) {
-        // Pick random category that has unused questions
+        // Pick random active category that has eligible questions
         const catRes = await pool.query(
           `SELECT c.id FROM yamboly_categories c
-           WHERE EXISTS (SELECT 1 FROM yamboly_questions q WHERE q.category_id = c.id AND q.used = FALSE AND q.difficulty = $1)
+           WHERE c.active = TRUE AND EXISTS (SELECT 1 FROM yamboly_questions q WHERE q.category_id = c.id AND q.difficulty = $1 AND ${eligible})
            ORDER BY RANDOM() LIMIT 1`, [difficulty]
         );
         if (catRes.rowCount && catRes.rowCount > 0) {
@@ -623,39 +852,39 @@ export async function executeModeratorAction(action: {
 
       // Pick question from this category
       const qRes = await pool.query(
-        `SELECT id FROM yamboly_questions 
-         WHERE category_id = $1 AND used = FALSE AND difficulty = $2
+        `SELECT q.id FROM yamboly_questions q
+         WHERE q.category_id = $1 AND q.difficulty = $2 AND ${eligible}
          ORDER BY RANDOM() LIMIT 1`,
         [chosenCatId, difficulty]
       );
 
-      let questionId = qRes.rows[0]?.id;
+      const questionId = qRes.rows[0]?.id;
       if (!questionId) {
         throw new Error("La categoría no tiene preguntas elegibles para esta ronda.");
       }
 
-      if (questionId) {
-        await pool.query("UPDATE yamboly_questions SET used = TRUE WHERE id = $1", [questionId]);
-      }
+      await pool.query("UPDATE yamboly_questions SET used = TRUE WHERE id = $1", [questionId]);
 
       const nextRound = session.current_round + 1;
+      summary = `Giró la ruleta (ronda ${nextRound} de ${sequence.length})`;
 
       await pool.query(
-        `UPDATE yamboly_sessions 
+        `UPDATE yamboly_sessions
          SET status = 'ROULETTE',
              current_round = $1,
+             total_rounds = $5,
              current_category_id = $2,
              current_question_id = $3,
              is_registration_open = FALSE,
              updated_at = NOW()
          WHERE id = $4`,
-        [nextRound, chosenCatId, questionId, sessionId]
+        [nextRound, chosenCatId, questionId, sessionId, sequence.length]
       );
       break;
     }
     case "START_READING": {
       await pool.query(
-        `UPDATE yamboly_sessions 
+        `UPDATE yamboly_sessions
          SET status = 'QUESTION_READING',
              reading_start_time = NOW(),
              updated_at = NOW()
@@ -666,7 +895,7 @@ export async function executeModeratorAction(action: {
     }
     case "START_ANSWERING": {
       await pool.query(
-        `UPDATE yamboly_sessions 
+        `UPDATE yamboly_sessions
          SET status = 'QUESTION_ANSWERING',
              answering_start_time = NOW(),
              updated_at = NOW()
@@ -676,8 +905,14 @@ export async function executeModeratorAction(action: {
       break;
     }
     case "REVEAL_ANSWER": {
+      if (session.tiebreak_round > 0) {
+        await pool.query(
+          "UPDATE yamboly_tiebreak_rounds SET closed_at = NOW() WHERE session_id = $1 AND round = $2",
+          [sessionId, session.tiebreak_round]
+        );
+      }
       await pool.query(
-        `UPDATE yamboly_sessions 
+        `UPDATE yamboly_sessions
          SET status = 'QUESTION_REVEAL',
              updated_at = NOW()
          WHERE id = $1`,
@@ -687,7 +922,7 @@ export async function executeModeratorAction(action: {
     }
     case "SHOW_ROUND_RANKING": {
       await pool.query(
-        `UPDATE yamboly_sessions 
+        `UPDATE yamboly_sessions
          SET status = 'ROUND_RANKING',
              updated_at = NOW()
          WHERE id = $1`,
@@ -696,17 +931,12 @@ export async function executeModeratorAction(action: {
       break;
     }
     case "SHOW_PODIUM": {
-      const ranking = await getYambolyLeaderboard(sessionId, 2147483647);
-      for (let i = 0; i < Math.min(3, ranking.length - 1); i++) {
-        const a = ranking[i], b = ranking[i + 1];
-        if (a.score === b.score && a.difficult_correct === b.difficult_correct &&
-            a.intermediate_correct === b.intermediate_correct &&
-            Math.abs(a.total_response_time_ms - b.total_response_time_ms) < 1000) {
-          throw new Error("Hay un empate técnico que afecta el podio; debe resolverse antes de publicar ganadores.");
-        }
+      const { relevantTies } = await getYambolyRanking(sessionId, pool);
+      if (relevantTies.length) {
+        throw new Error("Hay un empate técnico en puestos premiados. Inicia el desempate antes de publicar ganadores.");
       }
       await pool.query(
-        `UPDATE yamboly_sessions 
+        `UPDATE yamboly_sessions
          SET status = 'PODIUM',
              updated_at = NOW()
          WHERE id = $1`,
@@ -714,9 +944,63 @@ export async function executeModeratorAction(action: {
       );
       break;
     }
-    case "RESET_GAME": {
+    case "PREPARE_TIEBREAK": {
+      const { relevantTies } = await getYambolyRanking(sessionId, pool);
+      if (!relevantTies.length) throw new Error("No hay empates técnicos que afecten puestos premiados.");
+      const contenders = relevantTies.flatMap((group) => group.memberIds);
+      summary = `Anunció un desempate entre ${contenders.length} participantes (${relevantTies
+        .map((group) => `puestos ${group.fromPosition}–${group.toPosition}`)
+        .join(", ")})`;
       await pool.query(
-        `UPDATE yamboly_sessions 
+        `UPDATE yamboly_sessions
+         SET status = 'TIEBREAK',
+             tiebreak_participant_ids = $2,
+             current_category_id = NULL,
+             current_question_id = NULL,
+             reading_start_time = NULL,
+             answering_start_time = NULL,
+             updated_at = NOW()
+         WHERE id = $1`,
+        [sessionId, contenders]
+      );
+      break;
+    }
+    case "START_TIEBREAK_QUESTION": {
+      if (!session.tiebreak_participant_ids.length) throw new Error("No hay participantes en desempate.");
+      // Preferimos el banco exclusivo de desempate; si se agotó, cualquier pregunta publicada sin usar.
+      const qRes = await pool.query(
+        `SELECT id, category_id, is_tiebreaker FROM yamboly_questions
+         WHERE used = FALSE AND active = TRUE
+         ORDER BY is_tiebreaker DESC, RANDOM() LIMIT 1`
+      );
+      const question = qRes.rows[0];
+      if (!question) throw new Error("No quedan preguntas disponibles para el desempate. Agrega preguntas de desempate en la administración.");
+      const nextTiebreak = session.tiebreak_round + 1;
+      await pool.query("UPDATE yamboly_questions SET used = TRUE WHERE id = $1", [question.id]);
+      await pool.query(
+        "INSERT INTO yamboly_tiebreak_rounds (session_id, round, question_id, participant_ids) VALUES ($1, $2, $3, $4)",
+        [sessionId, nextTiebreak, question.id, session.tiebreak_participant_ids]
+      );
+      await pool.query(
+        `UPDATE yamboly_sessions
+         SET status = 'QUESTION_READING',
+             tiebreak_round = $2,
+             current_question_id = $3,
+             current_category_id = $4,
+             reading_start_time = NOW(),
+             answering_start_time = NULL,
+             updated_at = NOW()
+         WHERE id = $1`,
+        [sessionId, nextTiebreak, question.id, question.category_id]
+      );
+      summary = `Lanzó la pregunta de desempate ${nextTiebreak}${question.is_tiebreaker ? "" : " (del banco general: no quedaban de desempate)"}`;
+      break;
+    }
+    case "RESET_GAME": {
+      await pool.query("DELETE FROM yamboly_tiebreak_answers WHERE session_id = $1", [sessionId]);
+      await pool.query("DELETE FROM yamboly_tiebreak_rounds WHERE session_id = $1", [sessionId]);
+      await pool.query(
+        `UPDATE yamboly_sessions
          SET status = 'WAITING_REGISTRATION',
              current_round = 0,
              current_category_id = NULL,
@@ -724,6 +1008,9 @@ export async function executeModeratorAction(action: {
              reading_start_time = NULL,
              answering_start_time = NULL,
              is_registration_open = TRUE,
+             paused_at = NULL,
+             tiebreak_round = 0,
+             tiebreak_participant_ids = '{}',
              updated_at = NOW()
          WHERE id = $1`,
         [sessionId]
@@ -734,6 +1021,16 @@ export async function executeModeratorAction(action: {
       break;
     }
   }
+
+  await logYambolyAudit(pool, {
+    sessionId,
+    actor,
+    action: `MODERADOR_${action.type}`,
+    entityType: "session",
+    entityId: sessionId,
+    summary,
+    duringGame: isGameStarted(session),
+  });
 
   const updated = (await pool.query("SELECT * FROM yamboly_sessions WHERE id = $1", [sessionId])).rows[0];
   await pool.query("COMMIT");

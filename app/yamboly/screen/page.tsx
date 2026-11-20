@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { RouletteWheel } from "../components/RouletteWheel";
-import { Trophy, Crown, CheckCircle2, Flame, Users, Sparkles, Clock } from "lucide-react";
+import { Trophy, Crown, CheckCircle2, Flame, Users, Sparkles, Clock, Scale } from "lucide-react";
 import "../yamboly.css";
 
 export default function YambolyScreenPage() {
@@ -98,12 +98,24 @@ export default function YambolyScreenPage() {
     leaderboard,
     prizes,
     playedQuestions,
+    settings,
+    tiebreak,
   } = data;
   const status = session.status;
   const currentRound = session.current_round || 0;
   const totalRounds = session.total_rounds || 5;
   const participantsCount = Number(data.participantsCount || 0);
   const answeredCount = Number(data.answeredCount || 0);
+  const readingSec = settings?.readingDurationSec ?? 8;
+  const answeringSec = settings?.answeringDurationSec ?? 20;
+  const pointsPerCorrect = settings?.pointsPerCorrect ?? 4;
+  const tieSeconds = (settings?.tieThresholdMs ?? 1000) / 1000;
+  const inTiebreak = (session.tiebreak_round || 0) > 0;
+  const prizeFor = (place: number) => prizes?.find((prize: any) => prize.place === place);
+  // El podio muestra solo los puestos premiados (hasta 3 columnas).
+  const podiumPlaces = Math.min(3, Number(data.prizePlaces) || 3);
+  // Participantes en empate técnico que todavía afecta puestos premiados.
+  const relevantTieIds = new Set<number>((tiebreak?.groups ?? []).flatMap((g: any) => g.participants.map((x: any) => x.id)));
 
   return (
     <div className="yb-root">
@@ -143,7 +155,7 @@ export default function YambolyScreenPage() {
                 boxShadow: "0 0 20px rgba(0, 111, 245, 0.4)",
               }}
             >
-              RONDA {currentRound} / {totalRounds}
+              {inTiebreak || status === "TIEBREAK" ? "DESEMPATE" : `RONDA ${currentRound} / ${totalRounds}`}
             </div>
           </div>
         </header>
@@ -244,6 +256,7 @@ export default function YambolyScreenPage() {
                         <div style={{ fontWeight: 900, fontSize: "1.2rem", color: "#fff" }}>{p.title}</div>
                         <div style={{ fontSize: "0.9rem", color: "#94a3b8", marginTop: "3px" }}>
                           {p.description}
+                          {p.units > 1 ? ` · ${p.units} unidades` : ""}
                         </div>
                       </div>
                     </div>
@@ -256,11 +269,12 @@ export default function YambolyScreenPage() {
                   Reglas del Torneo
                 </h3>
                 <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: "0.65rem", fontSize: "1rem", color: "#cbd5e1" }}>
-                  <li> <strong>5 Rondas</strong> con temáticas sorteadas en vivo por la <strong>Ruleta Yámboly</strong>.</li>
+                  <li> <strong>{totalRounds} Rondas</strong> con temáticas sorteadas en vivo por la <strong>Ruleta Yámboly</strong>.</li>
                   <li> Las preguntas y categorías ya sorteadas se descartan de la ruleta.</li>
-                  <li> <strong>8 Segundos</strong> de lectura bloqueada para pensar antes de marcar.</li>
-                  <li> <strong>20 Segundos</strong> para marcar en tu celular.</li>
-                  <li> <strong>+4 Puntos</strong> por acierto. Desempate automático por velocidad en vivo.</li>
+                  <li> <strong>{readingSec} Segundos</strong> de lectura bloqueada para pensar antes de marcar.</li>
+                  <li> <strong>{answeringSec} Segundos</strong> para marcar en tu celular.</li>
+                  <li> <strong>+{pointsPerCorrect} Puntos</strong> por acierto. Empates: más aciertos difíciles, luego intermedios y luego velocidad.</li>
+                  <li> Si persiste un empate en puestos premiados, se juega una <strong>pregunta de desempate</strong>.</li>
                 </ul>
               </div>
             </div>
@@ -404,6 +418,45 @@ export default function YambolyScreenPage() {
           </div>
         )}
 
+        {/* TIEBREAK ANNOUNCEMENT */}
+        {status === "TIEBREAK" && (
+          <div className="yb-hud-panel" style={{ padding: "3.5rem 2.5rem", textAlign: "center" }}>
+            <span className="yb-badge-live" style={{ marginBottom: "0.75rem" }}>
+              PREGUNTA DE DESEMPATE #{(session.tiebreak_round || 0) + 1}
+            </span>
+            <div style={{ display: "flex", justifyContent: "center", margin: "0.5rem 0 1rem" }}>
+              <Scale size={64} color="var(--yb-gold)" />
+            </div>
+            <h1 style={{ fontSize: "clamp(2.4rem, 4vw, 3.4rem)", fontWeight: 900, color: "var(--yb-gold)" }}>
+              ¡Empate en puestos premiados!
+            </h1>
+            <p style={{ color: "#cbd5e1", fontSize: "1.25rem", marginTop: "0.75rem" }}>
+              Solo estos participantes responderán una pregunta adicional. No suma puntos: decide el orden del empate.
+            </p>
+            <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: "1rem", margin: "2rem 0" }}>
+              {tiebreak?.contenders?.map((p: any) => (
+                <span
+                  key={p.id}
+                  style={{
+                    padding: "0.9rem 1.6rem",
+                    borderRadius: "16px",
+                    background: "rgba(255, 183, 3, 0.15)",
+                    border: "1.5px solid var(--yb-gold)",
+                    fontSize: "1.4rem",
+                    fontWeight: 900,
+                  }}
+                >
+                  {p.full_name}
+                </span>
+              ))}
+            </div>
+            <p style={{ color: "#94a3b8", fontSize: "1.05rem" }}>
+              Gana quien acierte; entre quienes aciertan, el más rápido. Menos de {tieSeconds}s de diferencia sigue siendo
+              empate.
+            </p>
+          </div>
+        )}
+
         {/* STAGE 3, 4, 5: QUESTION DISPLAY (READING, ANSWERING, REVEAL) */}
         {["QUESTION_READING", "QUESTION_ANSWERING", "QUESTION_REVEAL"].includes(status) && currentQuestion && (
           <div className="yb-hud-panel yb-question-box">
@@ -413,12 +466,14 @@ export default function YambolyScreenPage() {
               <div
                 className="yb-category-tag"
                 style={{
-                  background: `${currentQuestion.category_color}22`,
-                  border: `1.5px solid ${currentQuestion.category_color}`,
-                  color: currentQuestion.category_color,
+                  background: inTiebreak ? "rgba(255, 183, 3, 0.15)" : `${currentQuestion.category_color}22`,
+                  border: `1.5px solid ${inTiebreak ? "var(--yb-gold)" : currentQuestion.category_color}`,
+                  color: inTiebreak ? "var(--yb-gold)" : currentQuestion.category_color,
                 }}
               >
-                {currentQuestion.category_name}
+                {inTiebreak
+                  ? `⚖️ DESEMPATE #${session.tiebreak_round} · ${tiebreak?.contenders?.map((p: any) => p.full_name).join(" vs ")}`
+                  : currentQuestion.category_name}
               </div>
 
               <div style={{ display: "flex", alignItems: "center", gap: "1.5rem" }}>
@@ -477,7 +532,7 @@ export default function YambolyScreenPage() {
                   display: "inline-block",
                 }}
               >
-                🔒 Tiempo de lectura (8s) · Celulares en espera... ¡Piensa tu respuesta!
+                🔒 Tiempo de lectura ({readingSec}s) · Celulares en espera... ¡Piensa tu respuesta!
               </div>
             )}
 
@@ -497,9 +552,13 @@ export default function YambolyScreenPage() {
                   gap: "14px",
                 }}
               >
-                <span>⚡ ¡VOTACIÓN EN CURSO! Marca tu alternativa en el celular ahora.</span>
+                <span>
+                  {inTiebreak
+                    ? "⚡ ¡DESEMPATE EN CURSO! Solo responden los participantes empatados."
+                    : "⚡ ¡VOTACIÓN EN CURSO! Marca tu alternativa en el celular ahora."}
+                </span>
                 <span style={{ padding: "4px 12px", background: "rgba(0,0,0,0.4)", borderRadius: "10px", color: "#fff", fontSize: "0.95rem" }}>
-                  {answeredCount} respuestas recibidas
+                  {answeredCount} {inTiebreak ? `de ${tiebreak?.contenders?.length || 0} ` : ""}respuestas recibidas
                 </span>
               </div>
             )}
@@ -603,7 +662,7 @@ export default function YambolyScreenPage() {
           <div className="yb-hud-panel" style={{ padding: "3rem" }}>
             <div style={{ textAlign: "center", marginBottom: "2.5rem" }}>
               <span className="yb-badge-live" style={{ marginBottom: "0.75rem" }}>
-                CLASIFICACIÓN TRAS RONDA {currentRound}
+                {inTiebreak ? `CLASIFICACIÓN TRAS EL DESEMPATE #${session.tiebreak_round}` : `CLASIFICACIÓN TRAS RONDA ${currentRound}`}
               </span>
               <h1 style={{ fontSize: "2.8rem", fontWeight: 900 }}>Tabla de Posiciones en Vivo</h1>
             </div>
@@ -651,6 +710,40 @@ export default function YambolyScreenPage() {
                         </td>
                         <td style={{ padding: "1.2rem 1.5rem", fontWeight: 800, fontSize: "1.25rem" }}>
                           {p.full_name}
+                          {relevantTieIds.has(p.id) && (
+                            <span
+                              style={{
+                                marginLeft: "12px",
+                                padding: "3px 10px",
+                                borderRadius: "999px",
+                                background: "rgba(255, 183, 3, 0.18)",
+                                border: "1px solid var(--yb-gold)",
+                                color: "var(--yb-gold)",
+                                fontSize: "0.8rem",
+                                fontWeight: 900,
+                                verticalAlign: "middle",
+                              }}
+                            >
+                              EMPATE TÉCNICO
+                            </span>
+                          )}
+                          {p.resolved_by_tiebreak && (
+                            <span
+                              style={{
+                                marginLeft: "12px",
+                                padding: "3px 10px",
+                                borderRadius: "999px",
+                                background: "rgba(0, 245, 155, 0.12)",
+                                border: "1px solid var(--yb-green)",
+                                color: "var(--yb-green)",
+                                fontSize: "0.8rem",
+                                fontWeight: 900,
+                                verticalAlign: "middle",
+                              }}
+                            >
+                              ⚖️ DEFINIDO POR DESEMPATE
+                            </span>
+                          )}
                         </td>
                         <td style={{ padding: "1.2rem 1.5rem", textAlign: "center", color: "var(--yb-cyan)", fontWeight: 800, fontSize: "1.1rem" }}>
                           {p.correct_count} / {currentRound}
@@ -688,7 +781,7 @@ export default function YambolyScreenPage() {
 
               <div className="yb-podium-wrap">
                 {/* 2nd Place */}
-                {leaderboard?.[1] && (
+                {leaderboard?.[1] && podiumPlaces >= 2 && (
                   <div className="yb-podium-col">
                     <div style={{ fontSize: "2.5rem", marginBottom: "0.5rem" }}>🥈</div>
                     <div style={{ fontWeight: 800, fontSize: "1.25rem", marginBottom: "4px" }}>
@@ -700,7 +793,7 @@ export default function YambolyScreenPage() {
                     <div className="yb-podium-pillar yb-pillar-2">
                       <span style={{ fontSize: "2.8rem", fontWeight: 900, color: "#cbd5e1" }}>2°</span>
                       <span style={{ fontSize: "0.9rem", color: "#cbd5e1", marginTop: "8px", padding: "0 10px", fontWeight: 700 }}>
-                        Pack Yámboly Silver
+                        {prizeFor(2)?.title ?? ""}
                       </span>
                     </div>
                   </div>
@@ -719,14 +812,14 @@ export default function YambolyScreenPage() {
                     <div className="yb-podium-pillar yb-pillar-1">
                       <span style={{ fontSize: "3.8rem", fontWeight: 900, color: "var(--yb-gold)" }}>1°</span>
                       <span style={{ fontSize: "1rem", fontWeight: 900, color: "#fff", marginTop: "8px", padding: "0 10px" }}>
-                        Super Pack Campeón Yámboly
+                        {prizeFor(1)?.title ?? ""}
                       </span>
                     </div>
                   </div>
                 )}
 
                 {/* 3rd Place */}
-                {leaderboard?.[2] && (
+                {leaderboard?.[2] && podiumPlaces >= 3 && (
                   <div className="yb-podium-col">
                     <div style={{ fontSize: "2.5rem", marginBottom: "0.5rem" }}>🥉</div>
                     <div style={{ fontWeight: 800, fontSize: "1.25rem", marginBottom: "4px" }}>
@@ -738,7 +831,7 @@ export default function YambolyScreenPage() {
                     <div className="yb-podium-pillar yb-pillar-3">
                       <span style={{ fontSize: "2.4rem", fontWeight: 900, color: "#cd7f32" }}>3°</span>
                       <span style={{ fontSize: "0.9rem", color: "#cd7f32", marginTop: "8px", padding: "0 10px", fontWeight: 700 }}>
-                        Pack Yámboly Bronze
+                        {prizeFor(3)?.title ?? ""}
                       </span>
                     </div>
                   </div>

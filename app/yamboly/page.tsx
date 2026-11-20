@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { Clock, CheckCircle2, XCircle, Award, Sparkles, AlertTriangle } from "lucide-react";
+import { Clock, CheckCircle2, Award, Scale } from "lucide-react";
 import "./yamboly.css";
 
 export default function YambolyParticipantPage() {
@@ -141,6 +141,14 @@ export default function YambolyParticipantPage() {
   const session = data?.session;
   const currentQuestion = data?.currentQuestion;
   const participantAnswer = data?.participantCurrentAnswer;
+  const pointsPerCorrect = data?.settings?.pointsPerCorrect ?? 4;
+  const prizePlaces = Number(data?.prizePlaces ?? 3);
+  const inTiebreak = (session?.tiebreak_round || 0) > 0;
+  const isContender = Boolean(participant?.is_tiebreak_contender);
+  const tiebreakContenders: { id: number; full_name: string }[] = data?.tiebreak?.contenders ?? [];
+  // Durante el desempate, quien no está empatado solo observa.
+  const spectatingTiebreak =
+    inTiebreak && !isContender && ["QUESTION_READING", "QUESTION_ANSWERING", "QUESTION_REVEAL"].includes(session?.status);
 
   return (
     <div className="yb-root">
@@ -302,6 +310,36 @@ export default function YambolyParticipantPage() {
               </div>
             )}
 
+            {/* TIEBREAK: ANNOUNCEMENT OR SPECTATOR VIEW */}
+            {(session?.status === "TIEBREAK" || spectatingTiebreak) && (
+              <div
+                className="yb-hud-panel"
+                style={{
+                  padding: "2.5rem 1.5rem",
+                  textAlign: "center",
+                  margin: "auto 0",
+                  border: `1.5px solid ${isContender ? "var(--yb-gold)" : "var(--yb-border)"}`,
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "center", marginBottom: "0.75rem" }}>
+                  <Scale size={48} color="var(--yb-gold)" />
+                </div>
+                <h2 style={{ fontSize: "1.6rem", fontWeight: 900, color: isContender ? "var(--yb-gold)" : "#fff" }}>
+                  {isContender ? "¡Estás en el desempate!" : "Desempate en curso"}
+                </h2>
+                <p style={{ color: "#cbd5e1", fontSize: "1rem", marginTop: "0.6rem", lineHeight: 1.45 }}>
+                  {isContender
+                    ? "Empataste en un puesto premiado. Responde la pregunta adicional: gana quien acierte y, entre quienes aciertan, el más rápido. No suma puntos."
+                    : `Solo responden los participantes empatados: ${tiebreakContenders.map((p) => p.full_name).join(", ")}. Mira la pantalla del auditorio.`}
+                </p>
+                {!isContender && (
+                  <div style={{ marginTop: "1.25rem", fontSize: "1rem", color: "var(--yb-cyan)", fontWeight: 800 }}>
+                    Tu puntaje final: {participant.score} puntos
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* ROULETTE VIEW ON PHONE */}
             {session?.status === "ROULETTE" && (
               <div className="yb-hud-panel" style={{ padding: "3rem 1.5rem", textAlign: "center", margin: "auto 0" }}>
@@ -316,7 +354,7 @@ export default function YambolyParticipantPage() {
             )}
 
             {/* QUESTION READING WITH VISIBLE COUNTDOWN (LOCKED) */}
-            {session?.status === "QUESTION_READING" && currentQuestion && (
+            {session?.status === "QUESTION_READING" && currentQuestion && !spectatingTiebreak && (
               <div className="yb-hud-panel" style={{ padding: "1.75rem 1.25rem", margin: "auto 0" }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1rem" }}>
                   <span
@@ -330,7 +368,7 @@ export default function YambolyParticipantPage() {
                       fontWeight: 800,
                     }}
                   >
-                    🔒 LECTURA (Móviles en espera)
+                    {inTiebreak ? "⚖️ DESEMPATE · LECTURA" : "🔒 LECTURA (Móviles en espera)"}
                   </span>
                   
                   {/* Countdown Badge on Player Mobile */}
@@ -394,17 +432,17 @@ export default function YambolyParticipantPage() {
             )}
 
             {/* QUESTION ANSWERING WITH ENERGETIC COUNTDOWN & TACTILE BUTTONS */}
-            {session?.status === "QUESTION_ANSWERING" && currentQuestion && (
+            {session?.status === "QUESTION_ANSWERING" && currentQuestion && !spectatingTiebreak && (
               <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", gap: "1rem" }}>
                 
                 {/* Header with Live Mobile Timer */}
                 <div className="yb-hud-panel" style={{ padding: "1.1rem", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                   <div>
-                    <span style={{ fontSize: "0.75rem", color: "var(--yb-cyan)", fontWeight: 900, textTransform: "uppercase" }}>
-                      ¡VOTACIÓN ABIERTA!
+                    <span style={{ fontSize: "0.75rem", color: inTiebreak ? "var(--yb-gold)" : "var(--yb-cyan)", fontWeight: 900, textTransform: "uppercase" }}>
+                      {inTiebreak ? "¡DESEMPATE!" : "¡VOTACIÓN ABIERTA!"}
                     </span>
                     <div style={{ fontSize: "1rem", fontWeight: 800, color: "#fff" }}>
-                      Ronda {session.current_round}
+                      {inTiebreak ? `Pregunta adicional #${session.tiebreak_round}` : `Ronda ${session.current_round}`}
                     </div>
                   </div>
 
@@ -491,7 +529,7 @@ export default function YambolyParticipantPage() {
             )}
 
             {/* QUESTION REVEAL (SHOWS EXACT GREEN / RED CARDS ON PHONE) */}
-            {session?.status === "QUESTION_REVEAL" && currentQuestion && (
+            {session?.status === "QUESTION_REVEAL" && currentQuestion && !spectatingTiebreak && (
               <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", gap: "1rem" }}>
                 
                 {/* Result Hero Banner */}
@@ -517,7 +555,11 @@ export default function YambolyParticipantPage() {
                       color: participantAnswer?.is_correct ? "var(--yb-green)" : "var(--yb-red)",
                     }}
                   >
-                    {participantAnswer?.is_correct ? "¡Acertaste! +4 PUNTOS" : "¡No acertaste esta vez!"}
+                    {participantAnswer?.is_correct
+                      ? inTiebreak
+                        ? "¡Acertaste el desempate!"
+                        : `¡Acertaste! +${pointsPerCorrect} PUNTOS`
+                      : "¡No acertaste esta vez!"}
                   </h2>
                   <p style={{ color: "#fff", fontSize: "0.95rem", marginTop: "0.4rem", fontWeight: 700 }}>
                     {participantAnswer?.is_correct
@@ -598,7 +640,11 @@ export default function YambolyParticipantPage() {
             {(session?.status === "ROUND_RANKING" || session?.status === "PODIUM") && (
               <div className="yb-hud-panel" style={{ padding: "2.5rem 1.5rem", textAlign: "center", margin: "auto 0" }}>
                 <span className="yb-badge-live" style={{ marginBottom: "0.5rem" }}>
-                  {session.status === "PODIUM" ? "FINAL DEL JUEGO" : `FIN RONDA ${session.current_round}`}
+                  {session.status === "PODIUM"
+                    ? "FINAL DEL JUEGO"
+                    : inTiebreak
+                    ? `TRAS EL DESEMPATE #${session.tiebreak_round}`
+                    : `FIN RONDA ${session.current_round}`}
                 </span>
                 <h2 style={{ fontSize: "1.8rem", fontWeight: 900, marginTop: "0.5rem" }}>
                   Tu Desempeño
@@ -626,8 +672,12 @@ export default function YambolyParticipantPage() {
                 </div>
 
                 <p style={{ color: "#94a3b8", fontSize: "0.95rem" }}>
-                  {participant.rank <= 3
+                  {participant.tied && session.current_round >= session.total_rounds && participant.rank <= prizePlaces
+                    ? "⚖️ Estás en un empate técnico por un puesto premiado. Atento al celular: puede haber una pregunta de desempate."
+                    : session.status === "PODIUM" && participant.rank && participant.rank <= prizePlaces
                     ? "🎉 ¡Estás en el Podio de Premios Yámboly! Acércate a la mesa de premiación."
+                    : session.status !== "PODIUM" && participant.rank && participant.rank <= prizePlaces
+                    ? "🔥 ¡Vas en zona de premios! Sigue así."
                     : "Mira la pantalla gigante para ver la clasificación final completa."}
                 </p>
               </div>

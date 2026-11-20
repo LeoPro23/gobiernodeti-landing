@@ -25,16 +25,16 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const session = await executeModeratorAction(action);
+    const session = await executeModeratorAction(action, process.env.ADMIN_EMAIL || "moderador");
 
     return NextResponse.json({
       success: true,
       session,
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error("Error in /api/yamboly/admin:", error);
     return NextResponse.json(
-      { error: error.message || "Error al ejecutar acción de moderador" },
+      { error: (error instanceof Error && error.message) || "Error al ejecutar acción de moderador" },
       { status: 500 }
     );
   }

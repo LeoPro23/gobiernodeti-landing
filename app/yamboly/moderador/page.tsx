@@ -14,19 +14,24 @@ import {
   ShieldAlert,
   ArrowRight,
   Flame,
-  Sparkles
+  Sparkles,
+  Settings2,
+  Scale
 } from "lucide-react";
 import "../yamboly.css";
 
-const PHASES = [
-  { id: "WAITING_REGISTRATION", label: "Lobby & QR", icon: Users, desc: "Inscripción abierta" },
-  { id: "ROULETTE", label: "Ruleta", icon: RotateCw, desc: "Sorteo de categoría" },
-  { id: "QUESTION_READING", label: "Lectura (8s)", icon: Clock, desc: "Móviles bloqueados" },
-  { id: "QUESTION_ANSWERING", label: "Votación (20s)", icon: Play, desc: "Votación abierta" },
-  { id: "QUESTION_REVEAL", label: "Revelación", icon: CheckCircle2, desc: "Respuesta correcta" },
-  { id: "ROUND_RANKING", label: "Ranking", icon: Trophy, desc: "Tabla de posiciones" },
-  { id: "PODIUM", label: "Podio Final", icon: Crown, desc: "Premiación oficial" },
-];
+function buildPhases(readingSec: number, answeringSec: number) {
+  return [
+    { id: "WAITING_REGISTRATION", label: "Lobby & QR", icon: Users, desc: "Inscripción abierta", action: "OPEN_REGISTRATION" },
+    { id: "ROULETTE", label: "Ruleta", icon: RotateCw, desc: "Sorteo de categoría", action: "SPIN_ROULETTE" },
+    { id: "QUESTION_READING", label: `Lectura (${readingSec}s)`, icon: Clock, desc: "Móviles bloqueados", action: "START_READING" },
+    { id: "QUESTION_ANSWERING", label: `Votación (${answeringSec}s)`, icon: Play, desc: "Votación abierta", action: "START_ANSWERING" },
+    { id: "QUESTION_REVEAL", label: "Revelación", icon: CheckCircle2, desc: "Respuesta correcta", action: "REVEAL_ANSWER" },
+    { id: "ROUND_RANKING", label: "Ranking", icon: Trophy, desc: "Tabla de posiciones", action: "SHOW_ROUND_RANKING" },
+    { id: "TIEBREAK", label: "Desempate", icon: Scale, desc: "Solo si hay empate", action: "PREPARE_TIEBREAK" },
+    { id: "PODIUM", label: "Podio Final", icon: Crown, desc: "Premiación oficial", action: "SHOW_PODIUM" },
+  ];
+}
 
 export default function YambolyModeratorPage() {
   const [data, setData] = useState<any>(null);
@@ -127,17 +132,26 @@ export default function YambolyModeratorPage() {
     );
   }
 
-  const { session, currentQuestion, playedQuestions, remainingPerCategory } = data;
+  const { session, currentQuestion, playedQuestions, remainingPerCategory, settings, tiebreak } = data;
   const status = session?.status;
   const isPaused = !!session?.paused_at;
   const currentRound = session?.current_round || 0;
   const totalRounds = session?.total_rounds || 5;
+  const readingSec = settings?.readingDurationSec ?? 8;
+  const answeringSec = settings?.answeringDurationSec ?? 20;
+  const inTiebreak = (session?.tiebreak_round || 0) > 0;
+  const isFinished = currentRound >= totalRounds;
+  const prizePlaces = Number(data.prizePlaces || 0);
+  const PHASES = buildPhases(readingSec, answeringSec);
 
   const participantsCount = Number(data.participantsCount || 0);
+  // Durante el desempate solo responden los participantes empatados.
+  const expectedAnswers = inTiebreak ? tiebreak?.contenders?.length || 0 : participantsCount;
   const answeredCount = Number(data.answeredCount || 0);
-  const responseRate = participantsCount > 0 ? Math.round((answeredCount / participantsCount) * 100) : 0;
+  const responseRate = expectedAnswers > 0 ? Math.round((answeredCount / expectedAnswers) * 100) : 0;
 
-  const currentPhaseIndex = PHASES.findIndex((p) => p.id === status);
+  const phaseId = status === "TIEBREAK" || (inTiebreak && status !== "ROUND_RANKING" && status !== "PODIUM") ? "TIEBREAK" : status;
+  const currentPhaseIndex = PHASES.findIndex((p) => p.id === phaseId);
 
   // Compute the primary action button
   let nextAction: { title: string; subtitle: string; action: string; color: string } = {
@@ -156,29 +170,29 @@ export default function YambolyModeratorPage() {
     };
   } else if (status === "ROULETTE") {
     nextAction = {
-      title: autoSequence ? "Sorteando... (Avanza solo a Lectura) ⏳" : "Lanzar Pregunta (8s Lectura) 📖",
+      title: autoSequence ? "Sorteando... (Avanza solo a Lectura) ⏳" : `Lanzar Pregunta (${readingSec}s Lectura) 📖`,
       subtitle: autoSequence ? "El temporizador automático pasará a lectura en breve" : "Muestra la pregunta en pantalla",
       action: "START_READING",
       color: "linear-gradient(135deg, #7928ca 0%, #006ff5 100%)",
     };
   } else if (status === "QUESTION_READING") {
     nextAction = {
-      title: autoSequence ? "Lectura en curso... (Abrirá votación solo) ⏳" : "Habilitar Votación Ahora (20s) ⚡",
+      title: autoSequence ? "Lectura en curso... (Abrirá votación solo) ⏳" : `Habilitar Votación Ahora (${answeringSec}s) ⚡`,
       subtitle: autoSequence ? "Al llegar a 0s se desbloquearán los celulares" : "Desbloquea los botones en móviles",
       action: "START_ANSWERING",
       color: "linear-gradient(135deg, #00f59b 0%, #00b4d8 100%)",
     };
   } else if (status === "QUESTION_ANSWERING") {
     nextAction = {
-      title: autoSequence ? `Votando... (${answeredCount} de ${participantsCount} votos) ⚡` : "Cerrar Votación y Revelar ✓",
-      subtitle: autoSequence ? `Se revelará solo al terminar los 20 segundos` : `${answeredCount} de ${participantsCount} votos recibidos (${responseRate}%)`,
+      title: autoSequence ? `Votando... (${answeredCount} de ${expectedAnswers} votos) ⚡` : "Cerrar Votación y Revelar ✓",
+      subtitle: autoSequence ? `Se revelará solo al terminar los ${answeringSec} segundos` : `${answeredCount} de ${expectedAnswers} votos recibidos (${responseRate}%)`,
       action: "REVEAL_ANSWER",
       color: "linear-gradient(135deg, #006ff5 0%, #42dcff 100%)",
     };
   } else if (status === "QUESTION_REVEAL") {
     nextAction = {
-      title: "Proyectar Tabla de Posiciones 🏆",
-      subtitle: `Ranking acumulado tras la Ronda ${currentRound}`,
+      title: inTiebreak ? "Ver Resultado del Desempate ⚖️" : "Proyectar Tabla de Posiciones 🏆",
+      subtitle: inTiebreak ? "Actualiza la clasificación con la pregunta de desempate" : `Ranking acumulado tras la Ronda ${currentRound}`,
       action: "SHOW_ROUND_RANKING",
       color: "linear-gradient(135deg, #ffb703 0%, #f77f00 100%)",
     };
@@ -190,14 +204,28 @@ export default function YambolyModeratorPage() {
         action: "SPIN_ROULETTE",
         color: "linear-gradient(135deg, #ff007a 0%, #ae1df5 100%)",
       };
+    } else if (tiebreak?.required) {
+      nextAction = {
+        title: inTiebreak ? "Nuevo Desempate: Siguen Empatados ⚖️" : "Iniciar Desempate ⚖️",
+        subtitle: `Empate técnico en puestos premiados: ${tiebreak.groups.map((g: any) => g.participants.map((p: any) => p.full_name).join(" vs ")).join(" · ")}`,
+        action: "PREPARE_TIEBREAK",
+        color: "linear-gradient(135deg, #ffb703 0%, #ff007a 100%)",
+      };
     } else {
       nextAction = {
         title: "Proclamar Ganadores y Mostrar Podio Final 👑",
-        subtitle: "Entrega oficial de los 3 Premios Yámboly",
+        subtitle: `Entrega oficial de ${prizePlaces === 1 ? "1 premio" : `${prizePlaces} premios`} Yámboly`,
         action: "SHOW_PODIUM",
         color: "linear-gradient(135deg, #ffb703 0%, #e63946 100%)",
       };
     }
+  } else if (status === "TIEBREAK") {
+    nextAction = {
+      title: "Lanzar Pregunta de Desempate ⚡",
+      subtitle: `Solo responden ${tiebreak?.contenders?.length || 0} participantes empatados · sin puntos, decide el orden`,
+      action: "START_TIEBREAK_QUESTION",
+      color: "linear-gradient(135deg, #ff007a 0%, #ffb703 100%)",
+    };
   } else if (status === "PODIUM") {
     nextAction = {
       title: "Dinámica Finalizada 🎉",
@@ -245,9 +273,9 @@ export default function YambolyModeratorPage() {
 
           <div style={{ display: "flex", alignItems: "center", gap: "1.5rem" }}>
             <div style={{ textAlign: "center" }}>
-              <div style={{ fontSize: "0.7rem", color: "#94a3b8", fontWeight: 700, letterSpacing: "1px" }}>RONDA</div>
-              <div style={{ fontSize: "1.3rem", fontWeight: 900, color: "var(--yb-cyan)" }}>
-                {currentRound} <span style={{ fontSize: "0.85rem", color: "#64748b" }}>/ {totalRounds}</span>
+              <div style={{ fontSize: "0.7rem", color: "#94a3b8", fontWeight: 700, letterSpacing: "1px" }}>{inTiebreak ? "DESEMPATE" : "RONDA"}</div>
+              <div style={{ fontSize: "1.3rem", fontWeight: 900, color: inTiebreak ? "var(--yb-gold)" : "var(--yb-cyan)" }}>
+                {inTiebreak ? `#${session.tiebreak_round}` : <>{currentRound} <span style={{ fontSize: "0.85rem", color: "#64748b" }}>/ {totalRounds}</span></>}
               </div>
             </div>
 
@@ -266,6 +294,25 @@ export default function YambolyModeratorPage() {
                 </div>
               </div>
             )}
+
+            <Link
+              href="/dashboard/yamboly"
+              target="_blank"
+              style={{
+                padding: "0.6rem 1.1rem",
+                borderRadius: "12px",
+                background: "rgba(255, 255, 255, 0.06)",
+                border: "1px solid rgba(255,255,255,0.15)",
+                color: "#cbd5e1",
+                fontWeight: 800,
+                fontSize: "0.85rem",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+              }}
+            >
+              <Settings2 size={15} /> Banco y premios ↗
+            </Link>
 
             <Link
               href="/yamboly/screen"
@@ -305,7 +352,7 @@ export default function YambolyModeratorPage() {
                   style={{ width: "16px", height: "16px", accentColor: "var(--yb-cyan)" }}
                 />
                 <span style={{ fontWeight: autoSequence ? 800 : 500, color: autoSequence ? "var(--yb-green)" : "#94a3b8" }}>
-                  ⚡ Secuencia 100% Automática (Ruleta → 8s Lectura → 20s Voto → Revelación)
+                  ⚡ Secuencia 100% Automática (Ruleta → {readingSec}s Lectura → {answeringSec}s Voto → Revelación)
                 </span>
               </label>
 
@@ -344,21 +391,7 @@ export default function YambolyModeratorPage() {
                   key={phase.id}
                   onClick={() => {
                     if (confirm(`¿Saltar manualmente a "${phase.label}"?`)) {
-                      triggerAction(
-                        phase.id === "ROULETTE"
-                          ? "SPIN_ROULETTE"
-                          : phase.id === "QUESTION_READING"
-                          ? "START_READING"
-                          : phase.id === "QUESTION_ANSWERING"
-                          ? "START_ANSWERING"
-                          : phase.id === "QUESTION_REVEAL"
-                          ? "REVEAL_ANSWER"
-                          : phase.id === "ROUND_RANKING"
-                          ? "SHOW_ROUND_RANKING"
-                          : phase.id === "PODIUM"
-                          ? "SHOW_PODIUM"
-                          : "OPEN_REGISTRATION"
-                      );
+                      triggerAction(phase.action);
                     }
                   }}
                   style={{
@@ -461,14 +494,58 @@ export default function YambolyModeratorPage() {
           </div>
         </div>
 
+        {/* AWARDS STATUS: TECHNICAL TIES AND TIEBREAK */}
+        {isFinished && status !== "PODIUM" && (
+          <div
+            className="yb-hud-panel"
+            style={{
+              padding: "1.5rem 1.75rem",
+              marginBottom: "1.5rem",
+              borderLeft: `5px solid ${tiebreak?.required || phaseId === "TIEBREAK" ? "var(--yb-gold)" : "var(--yb-green)"}`,
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "0.75rem" }}>
+              <Scale size={20} color="var(--yb-gold)" />
+              <h2 style={{ fontSize: "1.1rem", fontWeight: 900 }}>Estado de la premiación</h2>
+            </div>
+            {phaseId === "TIEBREAK" ? (
+              <p style={{ color: "#cbd5e1" }}>
+                Desempate en curso entre:{" "}
+                <strong>{tiebreak?.contenders?.map((p: any) => p.full_name).join(", ")}</strong>. Gana quien acierte; entre
+                quienes aciertan, el más rápido. Menos de {(settings?.tieThresholdMs ?? 1000) / 1000}s de diferencia sigue
+                siendo empate y requiere otra pregunta.
+              </p>
+            ) : tiebreak?.required ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                {tiebreak.groups.map((group: any) => (
+                  <p key={group.fromPosition} style={{ color: "#cbd5e1" }}>
+                    <strong style={{ color: "var(--yb-gold)" }}>
+                      Puestos {group.fromPosition}–{group.toPosition}:
+                    </strong>{" "}
+                    {group.participants.map((p: any) => p.full_name).join(" · ")}
+                  </p>
+                ))}
+                <p style={{ color: "#94a3b8", fontSize: "0.85rem" }}>
+                  Empate técnico: mismos puntos y aciertos por dificultad, y menos de{" "}
+                  {(settings?.tieThresholdMs ?? 1000) / 1000}s de diferencia. Inicia el desempate para definir los premios.
+                </p>
+              </div>
+            ) : (
+              <p style={{ color: "var(--yb-green)", fontWeight: 700 }}>
+                Sin empates en {prizePlaces === 1 ? "el puesto premiado" : `los ${prizePlaces} puestos premiados`}. Puedes publicar el podio.
+              </p>
+            )}
+          </div>
+        )}
+
         {/* MIDDLE SECTION: ACTIVE QUESTION & ROULETTE POOL HISTORY */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))", gap: "1.5rem", marginBottom: "1.5rem" }}>
           
           {/* Active Question Telemetry */}
           <div className="yb-hud-panel" style={{ padding: "1.75rem" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1rem" }}>
-              <h2 style={{ fontSize: "1.15rem", fontWeight: 800, color: "var(--yb-cyan)" }}>
-                Pregunta en Pantalla
+              <h2 style={{ fontSize: "1.15rem", fontWeight: 800, color: inTiebreak ? "var(--yb-gold)" : "var(--yb-cyan)" }}>
+                {inTiebreak ? `Pregunta de Desempate #${session.tiebreak_round}` : "Pregunta en Pantalla"}
               </h2>
               {currentQuestion && (
                 <span style={{ fontSize: "0.75rem", padding: "4px 10px", borderRadius: "999px", background: "rgba(255,255,255,0.1)", color: "#fff", fontWeight: 700 }}>

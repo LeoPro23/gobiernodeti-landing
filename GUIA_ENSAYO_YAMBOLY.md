@@ -7,13 +7,13 @@
 - La cookie conserva la participación en el mismo navegador mientras permanezca disponible. Conservarla es necesario para reconectar; la organización debe establecer el procedimiento para atender una pérdida de acceso y comprobar la identidad al entregar premios.
 - Cinco preguntas: una fácil, dos intermedias y dos difíciles; lectura de 8 segundos y respuesta de 20 segundos; cuatro puntos por acierto y cero por error u omisión.
 - Orden de clasificación previsto: puntos, aciertos difíciles, aciertos intermedios y menor tiempo acumulado de respuestas correctas. Menos de un segundo supone empate técnico. La interpretación acordada para tres o más participantes es agrupar a quienes estén a menos de un segundo del mejor tiempo del grupo con iguales puntos y aciertos por dificultad.
-- Si un empate técnico afecta puestos premiados, se requiere una pregunta adicional exclusiva para los afectados. **Este flujo todavía no está implementado**: el sistema bloquea el podio cuando detecta un empate relevante.
-- Tres puestos premiados inicialmente. La organización debe aprobar los premios y sus condiciones.
+- Si un empate técnico afecta puestos premiados, el podio se bloquea y se juega una pregunta adicional exclusiva para los afectados: no suma puntos; gana quien acierta y, entre quienes aciertan, el más rápido. Si persiste, se repite solo entre quienes siguen empatados.
+- Tres puestos premiados inicialmente, configurables en `/dashboard/yamboly`. La organización debe aprobar los premios y sus condiciones.
 
 ## Información y trabajo de la organización
 
 1. Designar moderador, responsable técnico y responsables de premios, y confirmar horario, proyector, acceso a internet y contingencia.
-2. Preparar y aprobar al menos 20 preguntas, opciones, respuestas correctas, dificultades y preguntas de desempate; comprobar que coincidan con las ponencias.
+2. Preparar y aprobar al menos 20 preguntas, opciones, respuestas correctas, dificultades y preguntas de desempate; comprobar que coincidan con las ponencias. Cargarlas en `/dashboard/yamboly` (formulario o CSV con la plantilla) y revisar el indicador de preparación.
 3. Confirmar con Yámboly los premios, cantidades, imágenes, autorización de marca, condiciones de conservación, entrega, plazo de reclamación y reasignación.
 4. Comunicar la finalidad de los datos a los participantes y definir responsables de acceso, conservación y eliminación. Definir cómo validar identidad y asistencia sin exponer correo ni teléfono en la proyección.
 5. Coordinar la preparación técnica, la carga del contenido y un ensayo completo. El contenido precargado es provisional y no implica aprobación de la organización.
@@ -25,6 +25,6 @@
 3. Registrar varios participantes con nombres, correos y teléfonos de prueba. Verificar campos obligatorios, rechazo de correo duplicado y reconexión con la misma cookie. Comprobar que no se proyecten correos ni teléfonos.
 4. Iniciar la partida y verificar cierre de registro, selección de categorías y secuencia de dificultades. Comprobar lectura, respuestas, cierre de tiempo y que una respuesta duplicada o tardía no cuente.
 5. Pausar en lectura y respuesta, intentar responder durante la pausa y reanudar. Confirmar que los temporizadores conservan el tiempo restante y las respuestas confirmadas permanecen.
-6. Comprobar puntajes y ranking con resultados conocidos. Ensayar empate en puestos premiados: actualmente debe bloquearse el podio; el desempate adicional requiere implementación antes del evento.
+6. Comprobar puntajes y ranking con resultados conocidos. Ensayar empate en puestos premiados: el podio debe bloquearse, la consola debe ofrecer «Iniciar desempate», solo los empatados deben poder responder y la clasificación debe resolverse sin cambiar puntajes. Ensayar también un empate que persista tras la primera pregunta adicional.
 7. Simular recarga, pérdida temporal de conexión y caída de proyección; verificar el procedimiento de respaldo y la recuperación en el mismo navegador.
 8. Repetir con el número esperado de asistentes y redes disponibles. Registrar incidencias, responsable y resultado; repetir el ensayo tras corregirlas. Solo aprobar el uso para premiación cuando los pendientes críticos estén resueltos y el ensayo sea satisfactorio.

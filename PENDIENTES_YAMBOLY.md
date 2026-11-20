@@ -1,6 +1,6 @@
 # Estado y pendientes de Yámboly Quiz Challenge
 
-Actualizado: 19 de noviembre de 2026. Consultar también [decisiones y guía de ensayo](./GUIA_YAMBOLY.md).
+Actualizado: 20 de noviembre de 2026. Consultar también [decisiones y guía de ensayo](./GUIA_YAMBOLY.md).
 
 ## Implementado
 
@@ -8,15 +8,18 @@ Actualizado: 19 de noviembre de 2026. Consultar también [decisiones y guía de 
 - Registro, acciones del moderador y respuestas sincronizados mediante bloqueo de la sesión en PostgreSQL. Las respuestas y los puntos se guardan en una transacción.
 - Pausa y reanudación persistentes: se bloquean respuestas mientras la partida está pausada y se ajusta el inicio del temporizador al reanudar.
 - Cierre del registro al iniciar; cinco rondas con dificultades fácil, intermedia, intermedia, difícil y difícil; selección aleatoria de preguntas disponibles sin repetir; 8 segundos de lectura y 20 de respuesta por defecto.
-- Cuatro puntos por acierto; el ranking prioriza aciertos difíciles e intermedios antes del tiempo. Se impide publicar el podio si se detecta un empate técnico que afecte los tres primeros puestos.
+- Cuatro puntos por acierto; el ranking prioriza aciertos difíciles e intermedios antes del tiempo.
+- **Desempate completo.** Empate técnico: mismos puntos y aciertos por dificultad, y menos del umbral configurable (1 s por defecto) respecto del mejor tiempo del grupo, sin encadenar diferencias. Si un grupo empatado alcanza algún puesto premiado, el podio se bloquea y el moderador anuncia el desempate: solo los afectados responden una pregunta adicional (del banco reservado para desempate; si se agota, del banco general). No suma puntos: gana quien acierta y, entre quienes aciertan, el más rápido; si persiste el empate, se juega otra pregunta solo entre quienes siguen empatados. Varios grupos se resuelven con la misma pregunta. Las respuestas de desempate se guardan aparte (`yamboly_tiebreak_rounds`, `yamboly_tiebreak_answers`) y solo cuentan al revelarse.
+- **Administración en `/dashboard/yamboly`.** Parámetros (lectura, respuesta, puntos, umbral de empate, rondas y su dificultad, ingreso tardío), premios por puesto (nombre, descripción, imagen, unidades, condiciones), categorías (crear, editar, activar/desactivar en la ruleta, eliminar vacías), preguntas (crear, editar, publicar/ocultar, eliminar las no usadas, marcar como de desempate, filtros), importación CSV atómica con plantilla y un indicador de preparación de la partida.
+- **Bloqueo de configuración e historial.** Al girar la primera ruleta se bloquean parámetros, puestos premiados y preguntas ya jugadas hasta reiniciar. Los demás cambios se permiten y quedan marcados «durante la partida». Todo cambio de configuración y toda acción del moderador queda en `yamboly_audit_log`, visible en el panel.
 
 ## Pendiente técnico antes de una premiación real
 
-1. Implementar la pregunta adicional y el flujo completo de desempate para participantes afectados, incluida la regla de agrupación acordada. El bloqueo actual no resuelve el empate y compara participantes adyacentes.
-2. Completar la administración de categorías, preguntas, premios y parámetros de partida, la importación, el historial de cambios y el bloqueo de configuración. Los valores y el banco inicial siguen en código o base de datos.
+1. ~~Pregunta adicional y flujo completo de desempate~~: implementado (ver arriba).
+2. ~~Administración de categorías, preguntas, premios y parámetros, importación, historial y bloqueo~~: implementado (ver arriba). El banco inicial solo se carga si no hay categorías.
 3. Trasladar el avance automático al servidor o proporcionar un proceso persistente equivalente: actualmente necesita que la consola del moderador permanezca abierta. Verificar la precisión de los relojes de los clientes; el servidor decide el plazo.
 4. Implementar o acordar recuperación de sesión ante pérdida de cookie o cambio de dispositivo y verificación de propiedad del correo. Un correo duplicado no recupera una sesión. El registro por correo no demuestra que sea auténtico ni impide que alguien use varios correos.
-5. Incorporar pruebas de integración con PostgreSQL para migración, pausa, concurrencia, límites de tiempo, clasificación y recuperación; probar carga y conexiones reales. Revisar límites de solicitudes, datos personales y configuración del despliegue. Los tokens antiguos siguen vigentes y requieren un procedimiento de invalidación antes de la partida real.
+5. Ampliar las pruebas de integración con PostgreSQL (`tests/yamboly-integration.test.ts` cubre migración, partida, desempate, bloqueos e historial; se activa con `YAMBOLY_TEST_DATABASE_URL` apuntando a una base local) a pausa, concurrencia, límites de tiempo y recuperación; probar carga y conexiones reales. Revisar límites de solicitudes, datos personales y configuración del despliegue. Los tokens antiguos siguen vigentes y requieren un procedimiento de invalidación antes de la partida real.
 6. Mostrar solo categorías elegibles en la ruleta, generar un QR local o prever respaldo y revisar imágenes y textos de premios. Actualmente el QR depende de un proveedor externo y las imágenes iniciales deben confirmarse.
 
 ## Por confirmar y ensayar con la organización
