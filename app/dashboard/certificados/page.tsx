@@ -45,7 +45,10 @@ export default async function CertificatesPage({ searchParams }: { searchParams:
               <td>{row.universidad}<span className="admin-cell-secondary">{row.carrera}</span></td><td className="admin-nowrap">{row.ciclo}</td><td>{row.ciudad || "—"}</td>
               <td className="admin-mono">{row.operation_number || "—"}</td>
               <td><span className={`admin-badge ${status.className}`}>{status.label}</span></td>
-              <td><a href={`/api/admin/certificados/${row.id}/comprobante`} target="_blank" rel="noopener noreferrer" className="admin-proof-link" aria-label={`Ver comprobante de solicitud ${row.id} (abre otra pestaña)`}>Ver comprobante <ExternalLink size={14} aria-hidden="true" /></a></td>
+              <td>
+                <div><Link href={`/dashboard/certificados/${row.id}`} className="admin-secondary admin-nowrap" prefetch={false} aria-label={`Revisar pago de solicitud ${row.id}`}>Revisar pago</Link></div>
+                <a href={`/api/admin/certificados/${row.id}/comprobante`} target="_blank" rel="noopener noreferrer" className="admin-proof-link" aria-label={`Ver comprobante de solicitud ${row.id} (abre otra pestaña)`}>Ver comprobante <ExternalLink size={14} aria-hidden="true" /></a>
+              </td>
               <td className="admin-nowrap">{row.created_at ? date.format(new Date(row.created_at)) : "—"}</td>
             </tr>
           }) : <tr><td colSpan={9}><div className="admin-empty"><Search size={30} aria-hidden="true" /><h3>{active ? "No encontramos coincidencias" : "Todavía no hay comprobantes"}</h3><p>{active ? "Probá con otros filtros o volvé a ver todas las solicitudes." : "Las solicitudes aparecerán acá cuando los participantes envíen sus comprobantes."}</p>{active ? <Link className="admin-secondary" href="/dashboard/certificados">Ver todas las solicitudes</Link> : null}</div></td></tr>}</tbody>
@@ -53,6 +56,6 @@ export default async function CertificatesPage({ searchParams }: { searchParams:
       </div>
       <DashboardPagination path="/dashboard/certificados" filters={filters} total={total} page={page} pages={pages} noun="comprobantes" />
     </section>
-    <p className="admin-footnote">Solo consulta · No se modifican pagos ni se emiten certificados desde este panel.<span>Datos personales · Uso exclusivo de administración</span></p>
+    <p className="admin-footnote">Revisá cada comprobante para validar o rechazar el pago. No se emiten certificados desde este panel.<span>Datos personales · Uso exclusivo de administración</span></p>
   </main>
 }

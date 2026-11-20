@@ -5,7 +5,7 @@ import Image from "next/image"
 import Link from "next/link"
 import { Menu, X } from "lucide-react"
 
-const navLinks = [["inicio", "Inicio"], ["ponentes", "Ponentes"], ["temario", "Programa"], ["beneficios", "Beneficios"], ["lugar", "Lugar"], ["certificado", "Certificado"]]
+const navLinks = [["inicio", "Inicio"], ["ponentes", "Ponentes"], ["temario", "Programa"], ["beneficios", "Beneficios"], ["lugar", "Lugar"], ["certificado", "Certificado"], ["yamboly", "🎡 Quiz Yámboly"]]
 
 function subscribeToScroll(onChange: () => void) {
   window.addEventListener("scroll", onChange, { passive: true })
@@ -42,12 +42,27 @@ export function SiteHeader({ page, onFaq }: { page: "home" | "speakers" | "regis
     <nav className={menuOpen ? "nav-links nav-links--open" : "nav-links"} aria-label="Navegación principal">
       {navLinks.map(([id, label]) => {
         const current = isHome ? active === id : (id === "ponentes" && page === "speakers") || (id === "certificado" && page === "certificate")
-        const href = id === "ponentes" ? "/ponentes" : id === "certificado" ? "/certificado" : `${isHome ? "" : "/"}#${id}`
+        const href = id === "ponentes" ? "/ponentes" : id === "certificado" ? "/certificado" : id === "yamboly" ? "/yamboly" : `${isHome ? "" : "/"}#${id}`
         return <a key={id} href={href} className={current ? "is-active" : undefined} aria-current={current ? (isHome ? "true" : "page") : undefined} onClick={() => setMenuOpen(false)}>{label}</a>
       })}
       {isHome ? <button type="button" onClick={() => { onFaq?.(); setMenuOpen(false) }}>FAQ</button> : <Link href="/?faq=1" onClick={() => setMenuOpen(false)}>FAQ</Link>}
     </nav>
-    <Link className="button button--gradient header-cta" href="/registro">REGÍSTRATE GRATIS</Link>
+    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+      <Link
+        href="/yamboly"
+        className="button"
+        style={{
+          background: "linear-gradient(135deg, rgba(255, 0, 122, 0.2) 0%, rgba(174, 29, 245, 0.2) 100%)",
+          border: "1px solid rgba(255, 0, 122, 0.5)",
+          color: "#fff",
+          height: "34px",
+          padding: "0 13px",
+        }}
+      >
+        🎡 QUIZ YÁMBOLY
+      </Link>
+      <Link className="button button--gradient header-cta" href="/registro">REGÍSTRATE GRATIS</Link>
+    </div>
     <button type="button" className="menu-toggle" aria-label={menuOpen ? "Cerrar menú" : "Abrir menú"} aria-expanded={menuOpen} onClick={() => setMenuOpen(!menuOpen)}>{menuOpen ? <X /> : <Menu />}</button>
   </div></header>
 }

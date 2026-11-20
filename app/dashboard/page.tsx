@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { Building2, CalendarDays, ListFilter, Search, Users, RefreshCw } from "lucide-react"
+import { Building2, CalendarDays, FileCheck2, ListFilter, Search, Users, RefreshCw } from "lucide-react"
 import { activeFilterEntries, adminPageUrl, getAdminRegistrations, type SearchParams } from "@/lib/admin-registrations"
 import { DashboardFilters, DashboardPagination, DashboardTabs } from "./dashboard-ui"
 
@@ -18,7 +18,10 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         <DashboardTabs />
         <section className="admin-heading">
           <div><p className="admin-eyebrow">GESTIÓN DEL EVENTO / INSCRIPCIONES</p><h1>Los próximos protagonistas.</h1><p className="admin-muted">Todos los inscritos al XII FULLDAY, en un solo lugar.</p></div>
-          <a href={adminPageUrl("/dashboard", filters, page)} className="admin-secondary"><RefreshCw size={16} aria-hidden="true" /> Actualizar datos</a>
+          <div className="admin-heading-actions">
+            <Link href="/dashboard/certificados" className="admin-primary"><FileCheck2 size={16} aria-hidden="true" /> Revisar certificados</Link>
+            <a href={adminPageUrl("/dashboard", filters, page)} className="admin-secondary"><RefreshCw size={16} aria-hidden="true" /> Actualizar datos</a>
+          </div>
         </section>
 
         <section className="admin-stats" aria-label="Resumen general de inscripciones">

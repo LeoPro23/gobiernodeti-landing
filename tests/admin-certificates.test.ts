@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
+import { renderToStaticMarkup } from "react-dom/server"
+import CertificatesPage from "@/app/dashboard/certificados/page"
 import { getAdminCertificates } from "@/lib/admin-certificates"
 import { parseFilters, registrationWhere } from "@/lib/admin-registrations"
 
@@ -12,6 +14,19 @@ beforeEach(() => {
 })
 
 describe("certificate request dashboard", () => {
+  it("keeps academic filters and the incoming payment review entry point together", async () => {
+    query.mockResolvedValueOnce({ rows: [{ total: 1, pending: 1, valid: 0, invalid: 0 }] })
+      .mockResolvedValueOnce({ rows: [{ total: 1 }] })
+      .mockResolvedValueOnce({ rows: [{ universities: ["UNT"], cities: [], careers: [], cycles: ["8.° ciclo"] }] })
+      .mockResolvedValueOnce({ rows: [{ id: "7", registration_id: 1, nombres: "Ana", apellidos: "Prueba", dni: "12345678", universidad: "UNT", carrera: "Sistemas", ciclo: "8.° ciclo", status: "pending", created_at: null }] })
+    const html = renderToStaticMarkup(await CertificatesPage({ searchParams: Promise.resolve({ ciclo: "8.° ciclo" }) }))
+    expect(html).toContain('name="ciclo"')
+    expect(html).toContain('href="/dashboard/certificados/7"')
+    expect(html).toContain("Revisar pago")
+    expect(html).toContain('href="/api/admin/certificados/7/comprobante"')
+    expect(html).not.toContain("No se modifican pagos")
+  })
+
   it("blocks all queries without authorization", async () => {
     requireAdmin.mockRejectedValue(new Error("unauthorized"))
     await expect(getAdminCertificates({})).rejects.toThrow("unauthorized")
