@@ -150,7 +150,6 @@ export default function YambolyParticipantPage() {
     }
     setIsSubmittingRegister(true);
     try {
-    try {
       const result = await postJson("/api/yamboly/register/lookup", { dni });
       if (result.found) {
         setFoundName(result.fullName);
