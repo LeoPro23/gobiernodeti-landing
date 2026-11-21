@@ -271,6 +271,28 @@
 .reg-dialog-close:hover { background: #eef3f9; color: var(--admin-ink); }
 .reg-dialog-hint { margin-top: 4px !important; color: var(--admin-muted); font-size: 13px; }
 .reg-dialog .reg-dialog-form { padding: 16px 0 18px; }
+/* Exportación con reglas de incluir/excluir */
+.reg-export-dialog { width: min(980px, calc(100vw - 32px)); }
+.reg-export-body { display: grid; gap: 14px; padding: 16px 0 4px; }
+.reg-export-rules { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.reg-export-rules li { display: grid; grid-template-columns: 110px minmax(0, 1.8fr) minmax(0, 1.2fr) minmax(0, 0.9fr) minmax(0, 1fr) 40px; gap: 8px; align-items: center; padding: 10px; border: 1px solid var(--admin-line); border-left: 4px solid #1d6b4b; border-radius: 8px; background: #fbfdff; }
+.reg-export-rules li.is-exclude { border-left-color: #a72938; background: #fffafb; }
+.reg-export-rules select { min-height: 38px !important; font-size: 13px !important; }
+.reg-export-mode select { font-weight: 700 !important; }
+.is-include .reg-export-mode select { color: #1d6b4b; }
+.is-exclude .reg-export-mode select { color: #a72938; }
+.reg-export-remove { display: grid; place-items: center; width: 36px; height: 36px; border: 1px solid var(--admin-line); border-radius: 8px; background: #fff; color: #a72938; cursor: pointer; }
+.reg-export-remove:hover { background: #fff2f3; }
+.reg-export-add { display: flex; flex-wrap: wrap; gap: 8px; }
+.reg-export-add button { display: inline-flex; align-items: center; gap: 5px; }
+.reg-export-empty, .reg-export-note { margin: 0 !important; color: var(--admin-muted); font-size: 13px; }
+.reg-export-footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 0 18px; margin-top: 8px; border-top: 1px solid var(--admin-line); }
+.reg-export-footer p { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; margin: 0 !important; }
+.reg-export-footer a { display: inline-flex; align-items: center; gap: 6px; text-decoration: none; }
+@media (max-width: 860px) {
+  .reg-export-rules li { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .reg-export-remove { justify-self: end; }
+}
 .reg-dialog .qa-check { flex-wrap: nowrap !important; align-items: flex-start !important; }
 .reg-dialog .qa-check input { flex-shrink: 0; margin-top: 1px; }
 .reg-table-bar { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; padding: 4px 24px 16px; }

@@ -1,6 +1,7 @@
 import Link from "next/link"
-import { Building2, CalendarDays, CheckSquare, Download, FileCheck2, FileText, ListFilter, Search, Users, RefreshCw } from "lucide-react"
+import { Building2, CalendarDays, CheckSquare, FileCheck2, ListFilter, Search, Users, RefreshCw } from "lucide-react"
 import { activeFilterEntries, adminPageUrl, getAdminRegistrations, type SearchParams } from "@/lib/admin-registrations"
+import { ExportDialog } from "./export-dialog"
 import { DashboardFilters, DashboardPagination, DashboardTabs } from "./dashboard-ui"
 import { ActionForm, ToggleCheckbox } from "./action-form"
 import { registrationAdminAction } from "./actions"
@@ -51,8 +52,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           <div><p className="admin-eyebrow">GESTIÓN DEL EVENTO / INSCRIPCIONES</p><h1>Los próximos protagonistas.</h1><p className="admin-muted">Todos los inscritos al XII FULLDAY, en un solo lugar.</p></div>
           <div className="admin-heading-actions">
             <Link href="/dashboard/certificados" className="admin-primary"><FileCheck2 size={16} aria-hidden="true" /> Revisar certificados</Link>
-            <a href="/api/dashboard/asistentes" className="admin-secondary" download title="Asistentes en el formato de la plantilla de sorteo"><Download size={16} aria-hidden="true" /> Asistentes Excel ({number.format(summary.attended)})</a>
-            <a href="/api/dashboard/asistentes?formato=txt" className="admin-secondary" download title="Un asistente por línea, para importar en una ruleta externa"><FileText size={16} aria-hidden="true" /> Asistentes TXT</a>
+            <ExportDialog options={options} />
             <a href={adminPageUrl("/dashboard", filters, page)} className="admin-secondary"><RefreshCw size={16} aria-hidden="true" /> Actualizar datos</a>
           </div>
         </section>

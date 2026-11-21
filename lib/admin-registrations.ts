@@ -1,5 +1,6 @@
 import "server-only"
 import { ensureRegistrationTable, getPool } from "@/lib/db"
+import { exportWhere, type ExportFilter } from "@/lib/export-rules"
 import { requireAdmin } from "@/lib/admin-auth"
 
 export type SearchParams = Record<string, string | string[] | undefined>
@@ -113,16 +114,26 @@ export async function getFilterOptions(): Promise<FilterOptions> {
     cycles: (row.cycles ?? []).sort((a, b) => a.localeCompare(b, "es", { numeric: true })) }
 }
 
-/** Inscritos con asistencia marcada, en orden alfabético, para la exportación a Excel. */
-export async function getAttendees() {
+/** Inscritos que pasan el filtro de exportación (por defecto, solo asistentes), en orden alfabético. */
+export async function getAttendees(filter: ExportFilter = { onlyAttended: true, rules: [] }) {
   await requireAdmin()
   await ensureRegistrationTable()
+  const { sql, values } = exportWhere(filter)
   const result = await getPool().query<{ full_name: string; telefono: string | null }>(`
     SELECT concat_ws(' ', trim(nombres), NULLIF(trim(apellidos), '')) AS full_name, telefono
     FROM registrations
-    WHERE asistio
-    ORDER BY lower(concat_ws(' ', trim(nombres), NULLIF(trim(apellidos), ''))), id`)
+    ${sql}
+    ORDER BY lower(concat_ws(' ', trim(nombres), NULLIF(trim(apellidos), ''))), id`, values)
   return result.rows
+}
+
+/** Cuántas personas saldrían en la exportación con ese filtro. */
+export async function countAttendees(filter: ExportFilter) {
+  await requireAdmin()
+  await ensureRegistrationTable()
+  const { sql, values } = exportWhere(filter)
+  const result = await getPool().query<{ total: number }>(`SELECT count(*)::int AS total FROM registrations ${sql}`, values)
+  return result.rows[0].total
 }
 
 export async function getAdminRegistrations(params: SearchParams) {

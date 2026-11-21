@@ -3,6 +3,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest"
 
 vi.mock("server-only", () => ({}))
+vi.mock("@/lib/admin-auth", () => ({ requireAdmin: async () => {} }))
 
 const url = process.env.YAMBOLY_TEST_DATABASE_URL
 const isLocal = url ? ["localhost", "127.0.0.1", "::1", "[::1]"].includes(new URL(url).hostname) : false
@@ -73,6 +74,36 @@ describe.skipIf(!url)("registro de participantes contra PostgreSQL", () => {
     await expect(changes.updateRegistration(id, { ...valid, dni: "90000009" })).rejects.toThrow("otra inscripción con ese DNI")
     await expect(changes.updateRegistration(999999999, valid)).rejects.toThrow("ya no existe")
     await pool.query("DELETE FROM registrations WHERE dni = '90000009'")
+  })
+
+  it("exporta según reglas de incluir y excluir (p. ej. sin 10.° ciclo de la UNT)", async () => {
+    const { getAttendees, countAttendees } = await import("@/lib/admin-registrations")
+    const { DEFAULT_EXPORT_FILTER } = await import("@/lib/export-rules")
+    await pool.query("DELETE FROM registrations WHERE dni LIKE '9100000_'")
+    const rows: [string, string, string, string, boolean][] = [
+      ["91000001", "Ana", "Universidad Nacional de Trujillo (UNT)", "10.° ciclo", true], // excluida por la regla
+      ["91000003", "Caro", "Universidad Nacional de Trujillo (UNT)", "1.° ciclo", true], // entra: 1.° no es 10.°
+      ["91000004", "Dani", "Universidad Privada Antenor Orrego (UPAO)", "10.° ciclo", true], // entra: otra universidad
+      ["91000005", "Elsa", "Universidad Nacional de Trujillo (UNT)", "9.° ciclo", true], // entra (y no tiene ciudad)
+      ["91000006", "Fito", "Universidad Nacional de Trujillo (UNT)", "8.° ciclo", false], // sin asistencia
+    ]
+    for (const [dni, nombres, universidad, ciclo, asistio] of rows) {
+      await pool.query("INSERT INTO registrations (nombres, apellidos, dni, universidad, carrera, ciclo, asistio) VALUES ($1, 'Prueba', $2, $3, 'Sistemas', $4, $5)", [nombres, dni, universidad, ciclo, asistio])
+    }
+    const names = async (filter: Parameters<typeof getAttendees>[0]) => (await getAttendees(filter)).map(a => a.full_name).filter(n => n.endsWith("Prueba"))
+    // Regla por defecto: solo asistentes, sin 10.° ciclo de la UNT. Elsa no tiene ciudad y aun así entra.
+    expect(await names(DEFAULT_EXPORT_FILTER)).toEqual(["Caro Prueba", "Dani Prueba", "Elsa Prueba"])
+    // Sin reglas: todos los asistentes.
+    expect(await names({ onlyAttended: true, rules: [] })).toEqual(["Ana Prueba", "Caro Prueba", "Dani Prueba", "Elsa Prueba"])
+    // Incluir solo la UPAO.
+    expect(await names({ onlyAttended: true, rules: [{ mode: "include", universidad: "Universidad Privada Antenor Orrego (UPAO)" }] })).toEqual(["Dani Prueba"])
+    // Excluir por ciudad no saca a quien no tiene ciudad registrada.
+    expect(await names({ onlyAttended: true, rules: [{ mode: "exclude", ciudad: "Lima, Lima" }] })).toContain("Elsa Prueba")
+    // Sin el filtro de asistencia también sale quien no la tiene.
+    expect(await names({ onlyAttended: false, rules: [] })).toContain("Fito Prueba")
+    expect(await countAttendees({ onlyAttended: true, rules: [{ mode: "include", universidad: "Universidad Privada Antenor Orrego (UPAO)" }] }))
+      .toBe((await pool.query("SELECT count(*)::int n FROM registrations WHERE asistio AND universidad = 'Universidad Privada Antenor Orrego (UPAO)'")).rows[0].n)
+    await pool.query("DELETE FROM registrations WHERE dni LIKE '9100000_'")
   })
 
   it("marca y desmarca la asistencia", async () => {
