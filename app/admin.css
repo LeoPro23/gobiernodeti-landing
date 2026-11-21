@@ -254,8 +254,14 @@
 .admin-columns fieldset label { display: flex !important; align-items: center; gap: 8px !important; font-size: 13px !important; font-weight: 500 !important; cursor: pointer; }
 .admin-columns fieldset input { width: 16px; height: 16px; accent-color: var(--admin-blue); }
 .reg-register { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
+.reg-row-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.reg-row-actions > form > .qa-fieldset { display: block; }
+.reg-row-actions > button { display: inline-flex; align-items: center; gap: 5px; }
+.reg-row-notice { display: inline-flex; align-items: center; gap: 4px; color: #1d6b4b; font-size: 12px; font-weight: 600; }
 .reg-register-notice { display: inline-flex; align-items: center; gap: 6px; color: #1d6b4b; font-size: 13px; font-weight: 600; }
 .reg-dialog { margin: auto; overflow: auto; overscroll-behavior: contain; width: min(760px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); padding: 0; border: 0; border-radius: 12px; background: #fff; color: var(--admin-ink); box-shadow: 0 24px 64px rgba(10, 30, 60, .28); }
+/* El modal de edición vive dentro de una celda: no debe heredar el texto chico ni la alineación de la tabla. */
+.reg-dialog { font-size: 14px; text-align: left; white-space: normal; font-weight: 400; }
 .reg-dialog::backdrop { background: rgba(10, 25, 50, .55); }
 .reg-dialog-body { padding: 20px 22px 6px; }
 .reg-dialog-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }

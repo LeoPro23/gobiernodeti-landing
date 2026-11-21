@@ -57,6 +57,24 @@ describe.skipIf(!url)("registro de participantes contra PostgreSQL", () => {
     await expect(changes.createPanelRegistration(changes.validatePanelRegistration(valid), false)).rejects.toThrow("Ya existe una inscripción con ese DNI")
   })
 
+  it("edita una inscripción, conserva valores antiguos y no repite DNI", async () => {
+    const id = (await pool.query("SELECT id FROM registrations WHERE dni = '90000001'")).rows[0].id
+    // Un valor que ya no está en las listas (inscripción antigua) se puede conservar al editar.
+    await pool.query("UPDATE registrations SET carrera = 'Carrera antigua' WHERE id = $1", [id])
+    const updated = await changes.updateRegistration(id, { ...valid, nombres: "Rosa María", carrera: "Carrera antigua", telefono: "987654321", autorizaDatos: true })
+    expect(updated.nombres).toBe("Rosa María")
+    const row = (await pool.query("SELECT nombres, carrera, telefono, autoriza_datos FROM registrations WHERE id = $1", [id])).rows[0]
+    expect(row).toEqual({ nombres: "Rosa María", carrera: "Carrera antigua", telefono: "987654321", autoriza_datos: true })
+    // Pero no se puede poner un valor nuevo que no esté en la lista.
+    await expect(changes.updateRegistration(id, { ...valid, carrera: "Medicina" })).rejects.toThrow("carrera")
+    // Ni usar el DNI de otra inscripción.
+    await pool.query("DELETE FROM registrations WHERE dni = '90000009'")
+    await changes.createPanelRegistration(changes.validatePanelRegistration({ ...valid, dni: "90000009" }), false)
+    await expect(changes.updateRegistration(id, { ...valid, dni: "90000009" })).rejects.toThrow("otra inscripción con ese DNI")
+    await expect(changes.updateRegistration(999999999, valid)).rejects.toThrow("ya no existe")
+    await pool.query("DELETE FROM registrations WHERE dni = '90000009'")
+  })
+
   it("marca y desmarca la asistencia", async () => {
     const id = (await pool.query("SELECT id FROM registrations WHERE dni = '90000001'")).rows[0].id
     await changes.setRegistrationAttendance(id, false)
@@ -74,7 +92,7 @@ describe.skipIf(!url)("registro de participantes contra PostgreSQL", () => {
     await expect(changes.deleteRegistration(withPayment.id)).rejects.toThrow("comprobantes")
 
     const id = (await pool.query("SELECT id FROM registrations WHERE dni = '90000001'")).rows[0].id
-    expect(await changes.deleteRegistration(id)).toBe("Rosa Quispe Díaz")
+    expect(await changes.deleteRegistration(id)).toBe("Rosa María Quispe Díaz")
     expect((await pool.query("SELECT 1 FROM registrations WHERE id = $1", [id])).rowCount).toBe(0)
   })
 })

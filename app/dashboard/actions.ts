@@ -7,6 +7,7 @@ import {
   deleteRegistration,
   RegistrationChangeError,
   setRegistrationAttendance,
+  updateRegistration,
   validatePanelRegistration,
 } from "@/lib/admin-registration-changes"
 import type { AdminFormState } from "./form-state"
@@ -46,6 +47,21 @@ export async function registrationAdminAction(_state: AdminFormState, form: Form
         })
         const created = await createPanelRegistration(data, form.get("asistio") === "on")
         return success(`Inscripción #${created.id} registrada: ${[created.nombres, created.apellidos].filter(Boolean).join(" ")}.`)
+      }
+      case "update": {
+        const data = await updateRegistration(id(form.get("id")), {
+          nombres: form.get("nombres"),
+          apellidos: form.get("apellidos"),
+          dni: form.get("dni"),
+          universidad: form.get("universidad"),
+          carrera: form.get("carrera"),
+          ciclo: form.get("ciclo"),
+          telefono: form.get("telefono"),
+          ciudad: form.get("ciudad"),
+          aceptaTerminos: form.get("aceptaTerminos") === "on",
+          autorizaDatos: form.get("autorizaDatos") === "on",
+        })
+        return success(`Datos actualizados: ${[data.nombres, data.apellidos].filter(Boolean).join(" ")}.`)
       }
       case "delete": {
         const name = await deleteRegistration(id(form.get("id")))

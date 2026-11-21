@@ -6,7 +6,7 @@ import { ActionForm, ToggleCheckbox } from "./action-form"
 import { registrationAdminAction } from "./actions"
 import { ColumnPicker, type ColumnOption } from "./column-picker"
 import { LiveSearch } from "./live-search"
-import { RegisterDialog } from "./register-dialog"
+import { EditRegistrationButton, RegisterDialog } from "./register-dialog"
 
 export const runtime = "nodejs"
 
@@ -90,13 +90,18 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                   <td data-col="autoriza"><span className={row.autoriza_datos ? "admin-badge admin-badge-yes" : "admin-badge"}>{row.autoriza_datos ? "Sí" : "No"}</span></td>
                   <td data-col="fecha" className="admin-nowrap">{row.created_at ? date.format(new Date(row.created_at)) : "—"}</td>
                   <td data-col="origen" className="admin-nowrap">{row.origen === "panel" ? "Panel" : "Web"}</td>
-                  <td data-col="acciones">{row.has_payment
-                    ? <span className="admin-cell-secondary" title="Tiene comprobantes de certificado">Con certificado</span>
-                    : <ActionForm inlineStatus action={registrationAdminAction} confirmMessage={`¿Quitar la inscripción de ${row.nombres} ${row.apellidos} (DNI ${row.dni})? Esta acción no se puede deshacer.`}>
-                        <input type="hidden" name="intent" value="delete" /><input type="hidden" name="id" value={row.id} />
-                        <button className="admin-secondary qa-small qa-danger" type="submit">Quitar</button>
-                      </ActionForm>}
-                  </td>
+                  <td data-col="acciones"><div className="reg-row-actions">
+                    <EditRegistrationButton action={registrationAdminAction} registration={{
+                      id: row.id, nombres: row.nombres, apellidos: row.apellidos, dni: row.dni, universidad: row.universidad, carrera: row.carrera,
+                      ciclo: row.ciclo, telefono: row.telefono, ciudad: row.ciudad, acepta_terminos: row.acepta_terminos, autoriza_datos: row.autoriza_datos,
+                    }} />
+                    {row.has_payment
+                      ? <span className="admin-cell-secondary" title="Tiene comprobantes de certificado: no se puede quitar">Con certificado</span>
+                      : <ActionForm inlineStatus action={registrationAdminAction} confirmMessage={`¿Quitar la inscripción de ${row.nombres} ${row.apellidos} (DNI ${row.dni})? Esta acción no se puede deshacer.`}>
+                          <input type="hidden" name="intent" value="delete" /><input type="hidden" name="id" value={row.id} />
+                          <button className="admin-secondary qa-small qa-danger" type="submit">Quitar</button>
+                        </ActionForm>}
+                  </div></td>
                 </tr>
               )) : <tr><td colSpan={COLUMNS.length}><div className="admin-empty"><Search size={30} aria-hidden="true" /><h3>{active ? "No encontramos coincidencias" : "Todavía no hay inscritos"}</h3><p>{active ? "Probá otra búsqueda o limpiá los filtros para ver todos los participantes." : "Los nuevos registros aparecerán acá cuando se inscriban al evento."}</p>{active ? <Link className="admin-secondary" href="/dashboard">Ver todos los inscritos</Link> : null}</div></td></tr>}</tbody>
             </table>

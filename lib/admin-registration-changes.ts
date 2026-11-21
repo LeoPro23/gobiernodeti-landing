@@ -10,11 +10,15 @@ export class RegistrationChangeError extends Error {}
 
 const text = (value: unknown) => (typeof value === "string" ? value.replace(/\s+/g, " ").trim() : "")
 
+type ListField = "universidad" | "carrera" | "ciclo" | "ciudad"
+
 /**
  * Inscripción desde el panel: solo DNI y nombres son obligatorios. Los demás campos se validan
  * si se completan; los vacíos se guardan como texto vacío (las columnas no admiten NULL).
+ * Al editar, `current` permite conservar un valor que ya tenía aunque no esté en las listas actuales.
  */
-export function validatePanelRegistration(input: Record<string, unknown>): RegistrationInput {
+export function validatePanelRegistration(input: Record<string, unknown>, current: Partial<Record<ListField, string | null>> = {}): RegistrationInput {
+  const inList = (field: ListField, list: string[], value: string) => !value || list.includes(value) || value === current[field]
   const data: RegistrationInput = {
     nombres: text(input.nombres),
     apellidos: text(input.apellidos),
@@ -30,10 +34,10 @@ export function validatePanelRegistration(input: Record<string, unknown>): Regis
   if (!data.dni || !data.nombres) throw new RegistrationChangeError("Completa el DNI y los nombres.")
   if (!/^\d{8,12}$/.test(data.dni)) throw new RegistrationChangeError("El DNI debe tener de 8 a 12 dígitos.")
   if (data.nombres.length > 150 || data.apellidos.length > 150) throw new RegistrationChangeError("Nombres y apellidos no pueden superar 150 caracteres.")
-  if (data.universidad && !UNIVERSIDADES.includes(data.universidad)) throw new RegistrationChangeError("Elige una universidad de la lista.")
-  if (data.carrera && !CARRERAS.includes(data.carrera)) throw new RegistrationChangeError("Elige una carrera de la lista.")
-  if (data.ciclo && !CICLOS.includes(data.ciclo)) throw new RegistrationChangeError("Elige un ciclo de la lista.")
-  if (data.ciudad && !CIUDADES.includes(data.ciudad)) throw new RegistrationChangeError("Elige una ciudad de la lista.")
+  if (!inList("universidad", UNIVERSIDADES, data.universidad)) throw new RegistrationChangeError("Elige una universidad de la lista.")
+  if (!inList("carrera", CARRERAS, data.carrera)) throw new RegistrationChangeError("Elige una carrera de la lista.")
+  if (!inList("ciclo", CICLOS, data.ciclo)) throw new RegistrationChangeError("Elige un ciclo de la lista.")
+  if (!inList("ciudad", CIUDADES, data.ciudad ?? "")) throw new RegistrationChangeError("Elige una ciudad de la lista.")
   if (data.telefono && !/^[+\d\s()-]{6,30}$/.test(data.telefono)) throw new RegistrationChangeError("Ingresa un teléfono válido.")
   return data
 }
@@ -48,6 +52,31 @@ export async function createPanelRegistration(data: RegistrationInput, asistio: 
     }
     throw error
   }
+}
+
+/** Corrige los datos de una inscripción. La asistencia se cambia aparte, con su casilla. */
+export async function updateRegistration(id: number, input: Record<string, unknown>) {
+  await ensureRegistrationTable()
+  const pool = getPool()
+  const current = (await pool.query<Record<ListField, string | null>>(
+    "SELECT universidad, carrera, ciclo, ciudad FROM registrations WHERE id = $1",
+    [id]
+  )).rows[0]
+  if (!current) throw new RegistrationChangeError("Esa inscripción ya no existe.")
+  const data = validatePanelRegistration(input, current)
+  try {
+    await pool.query(
+      `UPDATE registrations SET nombres = $2, apellidos = $3, dni = $4, universidad = $5, carrera = $6, ciclo = $7,
+         telefono = $8, ciudad = $9, acepta_terminos = $10, autoriza_datos = $11
+       WHERE id = $1`,
+      [id, data.nombres, data.apellidos, data.dni, data.universidad, data.carrera, data.ciclo,
+        data.telefono || null, data.ciudad || null, data.aceptaTerminos, data.autorizaDatos]
+    )
+  } catch (error) {
+    if ((error as { code?: string }).code === "23505") throw new RegistrationChangeError("Ya existe otra inscripción con ese DNI.")
+    throw error
+  }
+  return data
 }
 
 export async function setRegistrationAttendance(id: number, asistio: boolean) {
