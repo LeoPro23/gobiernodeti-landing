@@ -124,7 +124,7 @@ export async function getAdminRegistrations(params: SearchParams) {
     pool.query<{ total: number; today: number; universities: number; attended: number }>(`
       SELECT count(*)::int AS total,
         count(*) FILTER (WHERE (created_at AT TIME ZONE 'America/Lima')::date = (now() AT TIME ZONE 'America/Lima')::date)::int AS today,
-        count(DISTINCT universidad)::int AS universities,
+        count(DISTINCT NULLIF(universidad, ''))::int AS universities,
         count(*) FILTER (WHERE asistio)::int AS attended
       FROM registrations`),
     pool.query<{ total: number }>(`SELECT count(*)::int AS total FROM registrations r ${sql}`, values),

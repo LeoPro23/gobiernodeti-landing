@@ -45,7 +45,7 @@ export async function registrationAdminAction(_state: AdminFormState, form: Form
           autorizaDatos: form.get("autorizaDatos") === "on",
         })
         const created = await createPanelRegistration(data, form.get("asistio") === "on")
-        return success(`Inscripción #${created.id} registrada: ${created.nombres} ${created.apellidos}.`)
+        return success(`Inscripción #${created.id} registrada: ${[created.nombres, created.apellidos].filter(Boolean).join(" ")}.`)
       }
       case "delete": {
         const name = await deleteRegistration(id(form.get("id")))

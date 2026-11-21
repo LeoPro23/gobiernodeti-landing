@@ -31,11 +31,22 @@ describe.skipIf(!url)("registro de participantes contra PostgreSQL", () => {
     await pool?.end()
   })
 
-  it("valida como la inscripción web", () => {
+  it("solo exige DNI y nombres; valida los demás campos si se completan", () => {
     expect(changes.validatePanelRegistration(valid)).toMatchObject({ nombres: "Rosa", apellidos: "Quispe Díaz", telefono: "" })
-    expect(() => changes.validatePanelRegistration({ ...valid, aceptaTerminos: false })).toThrow("términos")
+    expect(changes.validatePanelRegistration({ dni: "90000003", nombres: "Solo Nombre" })).toMatchObject({
+      apellidos: "", universidad: "", carrera: "", ciclo: "", ciudad: "", aceptaTerminos: false, autorizaDatos: false,
+    })
+    expect(() => changes.validatePanelRegistration({ ...valid, nombres: "" })).toThrow("DNI y los nombres")
     expect(() => changes.validatePanelRegistration({ ...valid, dni: "123" })).toThrow("DNI")
     expect(() => changes.validatePanelRegistration({ ...valid, carrera: "Medicina" })).toThrow("carrera")
+  })
+
+  it("guarda una inscripción mínima y el quiz la reconoce sin apellidos", async () => {
+    const created = await changes.createPanelRegistration(changes.validatePanelRegistration({ dni: "90000003", nombres: "Solo Nombre" }), false)
+    const row = (await pool.query("SELECT apellidos, universidad, acepta_terminos, origen FROM registrations WHERE id = $1", [created.id])).rows[0]
+    expect(row).toEqual({ apellidos: "", universidad: "", acepta_terminos: false, origen: "panel" })
+    const name = (await pool.query("SELECT concat_ws(' ', trim(nombres), NULLIF(trim(apellidos), '')) AS n FROM registrations WHERE id = $1", [created.id])).rows[0].n
+    expect(name).toBe("Solo Nombre")
   })
 
   it("inscribe desde el panel con asistencia y rechaza el DNI repetido", async () => {

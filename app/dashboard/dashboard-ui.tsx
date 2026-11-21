@@ -16,12 +16,14 @@ function FilterSelect({ label, name, value, options, empty }: { label: string; n
   return <label>{label}<select name={name} defaultValue={value}><option value="">{empty}</option>{choices.map(option => <option key={option} value={option}>{option}</option>)}</select></label>
 }
 
-export function DashboardFilters({ filters, options, certificates = false }: { filters: AdminFilters; options: FilterOptions; certificates?: boolean }) {
+/** `search={false}` cuando la página muestra su propio buscador en vivo; el filtro de texto se conserva oculto. */
+export function DashboardFilters({ filters, options, certificates = false, search = true }: { filters: AdminFilters; options: FilterOptions; certificates?: boolean; search?: boolean }) {
   const path = certificates ? "/dashboard/certificados" : "/dashboard"
   const count = activeFilterEntries(filters, certificates).length
   return <form action={path} method="get" className="admin-filters admin-filters-expanded" key={JSON.stringify(filters)}>
+    {!search && filters.q ? <input type="hidden" name="q" value={filters.q} /> : null}
     <div className="admin-filter-grid">
-      <label className="admin-search">{certificates ? "Buscar solicitud" : "Buscar participante"}<div><Search size={17} aria-hidden="true" /><input name="q" defaultValue={filters.q} maxLength={150} placeholder={certificates ? "Nombre, DNI, teléfono u operación" : "Nombre, DNI, teléfono o carrera"} /></div></label>
+      {search ? <label className="admin-search">{certificates ? "Buscar solicitud" : "Buscar participante"}<div><Search size={17} aria-hidden="true" /><input name="q" defaultValue={filters.q} maxLength={150} placeholder={certificates ? "Nombre, DNI, teléfono u operación" : "Nombre, DNI, teléfono o carrera"} /></div></label> : null}
       <FilterSelect label="Universidad" name="universidad" value={filters.universidad} options={options.universities} empty="Todas las universidades" />
       <FilterSelect label="Ciudad" name="ciudad" value={filters.ciudad} options={options.cities} empty="Todas las ciudades" />
       <FilterSelect label="Carrera" name="carrera" value={filters.carrera} options={options.careers} empty="Todas las carreras" />

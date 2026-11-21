@@ -585,7 +585,8 @@ async function assertDniAvailable(db: Queryable, sessionId: string, dni: string)
 /** Inscripción del Fullday con ese DNI; solo se usa el nombre. */
 async function findFulldayRegistration(db: Queryable, dni: string): Promise<{ id: number; full_name: string } | null> {
   const res = await db.query(
-    "SELECT id, concat_ws(' ', trim(nombres), trim(apellidos)) AS full_name FROM registrations WHERE dni = $1 LIMIT 1",
+    // Las inscripciones hechas desde el panel pueden no tener apellidos.
+    "SELECT id, concat_ws(' ', trim(nombres), NULLIF(trim(apellidos), '')) AS full_name FROM registrations WHERE dni = $1 LIMIT 1",
     [dni]
   );
   return res.rows[0] ?? null;

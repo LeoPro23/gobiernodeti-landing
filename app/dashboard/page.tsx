@@ -1,11 +1,12 @@
 import Link from "next/link"
-import { Building2, CalendarDays, CheckSquare, FileCheck2, ListFilter, Search, Users, RefreshCw, UserPlus } from "lucide-react"
+import { Building2, CalendarDays, CheckSquare, FileCheck2, ListFilter, Search, Users, RefreshCw } from "lucide-react"
 import { activeFilterEntries, adminPageUrl, getAdminRegistrations, type SearchParams } from "@/lib/admin-registrations"
-import { CARRERAS, CICLOS, CIUDADES, UNIVERSIDADES } from "@/lib/registration-options"
 import { DashboardFilters, DashboardPagination, DashboardTabs } from "./dashboard-ui"
 import { ActionForm, ToggleCheckbox } from "./action-form"
 import { registrationAdminAction } from "./actions"
 import { ColumnPicker, type ColumnOption } from "./column-picker"
+import { LiveSearch } from "./live-search"
+import { RegisterDialog } from "./register-dialog"
 
 export const runtime = "nodejs"
 
@@ -35,12 +36,8 @@ const PRESETS = [
   { label: "Control de asistencia", visible: ["asistencia", "nombres", "apellidos", "dni"] },
 ]
 
-function Select({ label, name, options, required, defaultValue = "" }: { label: string; name: string; options: string[]; required?: boolean; defaultValue?: string }) {
-  return <label>{label}<select name={name} required={required} defaultValue={defaultValue}>
-    <option value="">{required ? "Elige una opción" : "Sin especificar"}</option>
-    {options.map(option => <option key={option} value={option}>{option}</option>)}
-  </select></label>
-}
+/** Las inscripciones hechas desde el panel pueden dejar campos vacíos. */
+const orDash = (value: string | null) => value || "—"
 
 export default async function DashboardPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
   const { filters, registrations, summary, options, total, page, pages } = await getAdminRegistrations(await searchParams)
@@ -67,29 +64,14 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
 
         <section className="admin-panel" aria-labelledby="registrations-title">
           <div className="admin-panel-heading"><div><h2 id="registrations-title">Registro de participantes <span className="admin-count">{number.format(total)}</span></h2><p className="admin-muted">{active ? "Resultados según los filtros aplicados." : "Más recientes primero. Marca la asistencia con la casilla de cada fila."}</p></div><ListFilter size={21} aria-hidden="true" /></div>
-          <DashboardFilters filters={filters} options={options} />
+          <DashboardFilters filters={filters} options={options} search={false} />
 
-          <div className="qa-page reg-admin-tools">
-            <details className="reg-admin-create">
-              <summary><UserPlus size={16} aria-hidden="true" /> Inscribir a una persona</summary>
-              <ActionForm className="qa-form" resetOnSuccess action={registrationAdminAction}>
-                <input type="hidden" name="intent" value="create" />
-                <div className="qa-grid qa-grid-3">
-                  <label>Nombres<input name="nombres" required maxLength={150} autoComplete="off" /></label>
-                  <label>Apellidos<input name="apellidos" required maxLength={150} autoComplete="off" /></label>
-                  <label>DNI<input name="dni" required inputMode="numeric" pattern="\d{8,12}" maxLength={12} placeholder="8 a 12 dígitos" autoComplete="off" /></label>
-                  <Select label="Universidad" name="universidad" options={UNIVERSIDADES} required />
-                  <Select label="Carrera" name="carrera" options={CARRERAS} required />
-                  <Select label="Ciclo" name="ciclo" options={CICLOS} required />
-                  <label>Teléfono (opcional)<input name="telefono" type="tel" maxLength={30} autoComplete="off" /></label>
-                  <Select label="Ciudad" name="ciudad" options={CIUDADES} defaultValue="Trujillo, La Libertad" />
-                </div>
-                <label className="qa-check"><input type="checkbox" name="aceptaTerminos" required /> La persona aceptó los términos y condiciones del evento</label>
-                <label className="qa-check"><input type="checkbox" name="autorizaDatos" /> Autoriza el uso de sus datos para comunicaciones</label>
-                <label className="qa-check"><input type="checkbox" name="asistio" defaultChecked /> Marcar asistencia</label>
-                <div className="qa-actions"><button className="admin-primary" type="submit"><UserPlus size={16} aria-hidden="true" /> Inscribir</button></div>
-              </ActionForm>
-            </details>
+          <div className="reg-admin-tools">
+            <RegisterDialog action={registrationAdminAction} />
+          </div>
+
+          <div className="reg-table-bar">
+            <LiveSearch initial={filters.q} label="Buscar participante" placeholder="Nombre, DNI, teléfono o carrera" />
             <ColumnPicker tableId="registrations-table" storageKey="fullday-admin-columns" columns={COLUMNS} presets={PRESETS} />
           </div>
 
@@ -100,8 +82,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
               <tbody>{registrations.length ? registrations.map(row => (
                 <tr key={row.id}>
                   <td data-col="asistencia"><ToggleCheckbox action={registrationAdminAction} intent="attendance" id={row.id} checked={row.asistio} label={`Asistencia de ${row.nombres} ${row.apellidos}`} /></td>
-                  <td data-col="id" className="admin-id">#{row.id}</td><td data-col="nombres" className="admin-person">{row.nombres}</td><td data-col="apellidos" className="admin-person">{row.apellidos}</td><td data-col="dni" className="admin-mono">{row.dni}</td>
-                  <td data-col="universidad">{row.universidad}</td><td data-col="carrera">{row.carrera}</td><td data-col="ciclo" className="admin-nowrap">{row.ciclo}</td><td data-col="telefono" className="admin-mono admin-nowrap">{row.telefono || "—"}</td><td data-col="ciudad">{row.ciudad || "—"}</td>
+                  <td data-col="id" className="admin-id">#{row.id}</td><td data-col="nombres" className="admin-person">{row.nombres}</td><td data-col="apellidos" className="admin-person">{orDash(row.apellidos)}</td><td data-col="dni" className="admin-mono">{row.dni}</td>
+                  <td data-col="universidad">{orDash(row.universidad)}</td><td data-col="carrera">{orDash(row.carrera)}</td><td data-col="ciclo" className="admin-nowrap">{orDash(row.ciclo)}</td><td data-col="telefono" className="admin-mono admin-nowrap">{orDash(row.telefono)}</td><td data-col="ciudad">{orDash(row.ciudad)}</td>
                   <td data-col="terminos"><span className={row.acepta_terminos ? "admin-badge admin-badge-yes" : "admin-badge"}>{row.acepta_terminos ? "Aceptados" : "No acepta"}</span></td>
                   <td data-col="autoriza"><span className={row.autoriza_datos ? "admin-badge admin-badge-yes" : "admin-badge"}>{row.autoriza_datos ? "Sí" : "No"}</span></td>
                   <td data-col="fecha" className="admin-nowrap">{row.created_at ? date.format(new Date(row.created_at)) : "—"}</td>

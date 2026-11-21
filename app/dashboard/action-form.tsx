@@ -13,6 +13,7 @@ export function ActionForm({
   resetOnSuccess = false,
   inlineStatus = false,
   action: serverAction = yambolyAdminAction,
+  onSuccess,
 }: {
   children: ReactNode
   className?: string
@@ -20,12 +21,18 @@ export function ActionForm({
   resetOnSuccess?: boolean
   inlineStatus?: boolean
   action?: AdminFormAction
+  /** Si se indica, el aviso de éxito lo muestra quien llama (por ejemplo, al cerrar un modal). */
+  onSuccess?: (message: string) => void
 }) {
   const [state, action, pending] = useActionState(serverAction, null)
   const formRef = useRef<HTMLFormElement>(null)
 
   useEffect(() => {
-    if (state?.ok && resetOnSuccess) formRef.current?.reset()
+    if (!state?.ok) return
+    if (resetOnSuccess) formRef.current?.reset()
+    onSuccess?.(state.message)
+    // Solo al recibir un resultado nuevo, no cuando cambia la función.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state, resetOnSuccess])
 
   return (
@@ -44,7 +51,7 @@ export function ActionForm({
     >
       <fieldset disabled={pending} className="qa-fieldset">{children}</fieldset>
       {pending && <p className="qa-status" role="status">Guardando…</p>}
-      {!pending && state && (
+      {!pending && state && !(state.ok && onSuccess) && (
         state.ok
           ? <p className={inlineStatus ? "qa-status qa-ok qa-inline" : "qa-status qa-ok"} role="status">{state.message}</p>
           : <div className={inlineStatus ? "qa-status qa-error qa-inline" : "qa-status qa-error"} role="alert">

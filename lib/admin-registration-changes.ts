@@ -10,7 +10,10 @@ export class RegistrationChangeError extends Error {}
 
 const text = (value: unknown) => (typeof value === "string" ? value.replace(/\s+/g, " ").trim() : "")
 
-/** Mismas reglas que la inscripción web, más los límites de las columnas. */
+/**
+ * Inscripción desde el panel: solo DNI y nombres son obligatorios. Los demás campos se validan
+ * si se completan; los vacíos se guardan como texto vacío (las columnas no admiten NULL).
+ */
 export function validatePanelRegistration(input: Record<string, unknown>): RegistrationInput {
   const data: RegistrationInput = {
     nombres: text(input.nombres),
@@ -24,17 +27,14 @@ export function validatePanelRegistration(input: Record<string, unknown>): Regis
     aceptaTerminos: input.aceptaTerminos === true,
     autorizaDatos: input.autorizaDatos === true,
   }
-  if (!data.nombres || !data.apellidos || !data.dni || !data.universidad || !data.carrera || !data.ciclo) {
-    throw new RegistrationChangeError("Completa nombres, apellidos, DNI, universidad, carrera y ciclo.")
-  }
+  if (!data.dni || !data.nombres) throw new RegistrationChangeError("Completa el DNI y los nombres.")
   if (!/^\d{8,12}$/.test(data.dni)) throw new RegistrationChangeError("El DNI debe tener de 8 a 12 dígitos.")
   if (data.nombres.length > 150 || data.apellidos.length > 150) throw new RegistrationChangeError("Nombres y apellidos no pueden superar 150 caracteres.")
-  if (!UNIVERSIDADES.includes(data.universidad)) throw new RegistrationChangeError("Elige una universidad de la lista.")
-  if (!CARRERAS.includes(data.carrera)) throw new RegistrationChangeError("Elige una carrera de la lista.")
-  if (!CICLOS.includes(data.ciclo)) throw new RegistrationChangeError("Elige un ciclo de la lista.")
+  if (data.universidad && !UNIVERSIDADES.includes(data.universidad)) throw new RegistrationChangeError("Elige una universidad de la lista.")
+  if (data.carrera && !CARRERAS.includes(data.carrera)) throw new RegistrationChangeError("Elige una carrera de la lista.")
+  if (data.ciclo && !CICLOS.includes(data.ciclo)) throw new RegistrationChangeError("Elige un ciclo de la lista.")
   if (data.ciudad && !CIUDADES.includes(data.ciudad)) throw new RegistrationChangeError("Elige una ciudad de la lista.")
   if (data.telefono && !/^[+\d\s()-]{6,30}$/.test(data.telefono)) throw new RegistrationChangeError("Ingresa un teléfono válido.")
-  if (!data.aceptaTerminos) throw new RegistrationChangeError("Confirma que la persona aceptó los términos y condiciones del evento.")
   return data
 }
 
@@ -76,7 +76,7 @@ export async function deleteRegistration(id: number) {
     }
     await client.query("DELETE FROM registrations WHERE id = $1", [id])
     await client.query("COMMIT")
-    return `${row.nombres} ${row.apellidos}`
+    return [row.nombres, row.apellidos].filter(Boolean).join(" ")
   } catch (error) {
     await client.query("ROLLBACK")
     throw error
