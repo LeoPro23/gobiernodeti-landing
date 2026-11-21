@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest"
 import {
+  cleanEmail,
+  cleanParticipantName,
+  normalizeDni,
   parseCsv,
   parseGameSettings,
   parseQuestionImport,
@@ -129,6 +132,22 @@ describe("validación de preguntas", () => {
     expect(validateQuestion({ ...ok, options: ["IEEE", "", "ISO", ""] }).ok).toBe(false)
     expect(validateQuestion({ ...ok, options: ["ISACA", "isaca", "", ""] }).ok).toBe(false)
     expect(validateQuestion({ ...ok, difficulty: "media" }).ok).toBe(false)
+  })
+})
+
+describe("datos de inscripción", () => {
+  it("acepta DNI de 8 a 12 dígitos", () => {
+    expect(normalizeDni(" 12345678 ")).toBe("12345678")
+    expect(normalizeDni("1234567")).toBeNull()
+    expect(normalizeDni("12345678a")).toBeNull()
+    expect(normalizeDni(12345678)).toBeNull()
+  })
+
+  it("limpia espacios del nombre y normaliza el correo", () => {
+    expect(cleanParticipantName("  Ana   Torres ")).toEqual({ ok: true, value: "Ana Torres" })
+    expect(cleanParticipantName("A").ok).toBe(false)
+    expect(cleanEmail(" Ana@Test.PE ")).toEqual({ ok: true, value: "ana@test.pe" })
+    expect(cleanEmail("ana@test").ok).toBe(false)
   })
 })
 

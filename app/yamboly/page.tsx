@@ -4,10 +4,57 @@ import React, { useEffect, useState } from "react";
 import { Clock, CheckCircle2, Award, Scale } from "lucide-react";
 import "./yamboly.css";
 
+const fieldLabelStyle: React.CSSProperties = { display: "block", fontSize: "0.85rem", fontWeight: 700, marginBottom: "6px", color: "#cbd5e1" };
+const fieldInputStyle: React.CSSProperties = {
+  width: "100%",
+  padding: "0.95rem 1rem",
+  borderRadius: "14px",
+  background: "rgba(255,255,255,0.06)",
+  border: "1px solid rgba(255,255,255,0.18)",
+  color: "#fff",
+  fontSize: "1rem",
+  outline: "none",
+};
+const primaryButtonStyle: React.CSSProperties = {
+  marginTop: "0.5rem",
+  padding: "1.1rem",
+  borderRadius: "16px",
+  background: "linear-gradient(135deg, var(--yb-blue) 0%, var(--yb-purple) 100%)",
+  color: "#fff",
+  fontWeight: 900,
+  fontSize: "1.1rem",
+  border: "none",
+  cursor: "pointer",
+  boxShadow: "0 0 30px rgba(0, 111, 245, 0.5)",
+};
+const linkButtonStyle: React.CSSProperties = {
+  background: "none",
+  border: "none",
+  color: "var(--yb-cyan)",
+  fontWeight: 700,
+  fontSize: "0.95rem",
+  cursor: "pointer",
+  padding: "0.5rem",
+};
+
+async function postJson(url: string, body: unknown) {
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(json.error || "No se pudo completar la inscripción.");
+  return json;
+}
+
 export default function YambolyParticipantPage() {
+  // Registro en dos pasos: DNI y luego confirmar el nombre (inscritos del Fullday) o escribir nombre y correo.
+  const [registerStep, setRegisterStep] = useState<"dni" | "confirm" | "details">("dni");
+  const [dni, setDni] = useState("");
+  const [foundName, setFoundName] = useState("");
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
   const [isSubmittingRegister, setIsSubmittingRegister] = useState(false);
   const [registerError, setRegisterError] = useState<string | null>(null);
 
@@ -75,29 +122,48 @@ export default function YambolyParticipantPage() {
     }
   }, [data?.session?.status, data?.session?.reading_start_time, data?.session?.answering_start_time, data?.session?.paused_at]);
 
-  const handleRegister = async (e: React.FormEvent) => {
+  const handleLookup = async (e: React.FormEvent) => {
     e.preventDefault();
     setRegisterError(null);
+    if (!/^\d{8,12}$/.test(dni)) {
+      setRegisterError("Ingresa un DNI válido de 8 a 12 dígitos.");
+      return;
+    }
     setIsSubmittingRegister(true);
-
     try {
-      const res = await fetch("/api/yamboly/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fullName, email, phone }),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "Error al registrarse");
-
-      // Refresh state immediately
-      const stateRes = await fetch("/api/yamboly/state");
-      const stateJson = await stateRes.json();
-      setData(stateJson);
-    } catch (err: any) {
-      setRegisterError(err.message);
+      const result = await postJson("/api/yamboly/register/lookup", { dni });
+      if (result.found) {
+        setFoundName(result.fullName);
+        setRegisterStep("confirm");
+      } else {
+        setRegisterStep("details");
+      }
+    } catch (err) {
+      setRegisterError(err instanceof Error ? err.message : "No se pudo consultar el DNI.");
     } finally {
       setIsSubmittingRegister(false);
     }
+  };
+
+  const completeRegistration = async (body: { dni: string; fullName?: string; email?: string }) => {
+    setRegisterError(null);
+    setIsSubmittingRegister(true);
+    try {
+      await postJson("/api/yamboly/register", body);
+      // Refresh state immediately
+      const stateRes = await fetch("/api/yamboly/state");
+      setData(await stateRes.json());
+    } catch (err) {
+      setRegisterError(err instanceof Error ? err.message : "No se pudo completar la inscripción.");
+    } finally {
+      setIsSubmittingRegister(false);
+    }
+  };
+
+  const changeDni = () => {
+    setRegisterStep("dni");
+    setFoundName("");
+    setRegisterError(null);
   };
 
   const handleSelectOption = async (optionId: string) => {
@@ -228,53 +294,75 @@ export default function YambolyParticipantPage() {
               </div>
             )}
 
-            <form onSubmit={handleRegister} style={{ display: "flex", flexDirection: "column", gap: "1.1rem" }}>
-              <div>
-                <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 700, marginBottom: "6px", color: "#cbd5e1" }}>
-                  Nombres completos *
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Ej. Ronald Melgarejo"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  style={{
-                    width: "100%",
-                    padding: "0.95rem 1rem",
-                    borderRadius: "14px",
-                    background: "rgba(255,255,255,0.06)",
-                    border: "1px solid rgba(255,255,255,0.18)",
-                    color: "#fff",
-                    fontSize: "1rem",
-                    outline: "none",
-                  }}
-                />
+            {registerStep === "dni" && (
+              <form onSubmit={handleLookup} style={{ display: "flex", flexDirection: "column", gap: "1.1rem" }}>
+                <div>
+                  <label htmlFor="yb-dni" style={fieldLabelStyle}>DNI *</label>
+                  <input
+                    id="yb-dni"
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    required
+                    maxLength={12}
+                    placeholder="Ej. 12345678"
+                    value={dni}
+                    onChange={(e) => { setDni(e.target.value.replace(/\D/g, "")); setRegisterError(null); }}
+                    style={fieldInputStyle}
+                  />
+                </div>
+                <p style={{ fontSize: "0.85rem", color: "#94a3b8", lineHeight: 1.4 }}>
+                  Si te inscribiste en el Fullday, entrarás con los datos de tu inscripción.
+                </p>
+                <button type="submit" disabled={isSubmittingRegister} style={primaryButtonStyle}>
+                  {isSubmittingRegister ? "Buscando..." : "Continuar"}
+                </button>
+              </form>
+            )}
+
+            {registerStep === "confirm" && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "1.1rem", textAlign: "center" }}>
+                <p style={{ fontSize: "0.95rem", color: "#cbd5e1" }}>Encontramos tu inscripción al Fullday. ¿Eres tú?</p>
+                <p style={{ fontSize: "1.5rem", fontWeight: 900, lineHeight: 1.25, wordBreak: "break-word" }}>{foundName}</p>
+                <p style={{ fontSize: "0.85rem", color: "#94a3b8", lineHeight: 1.4 }}>
+                  Tu nombre se mostrará en el ranking. Conserva este navegador para mantener tu participación.
+                </p>
+                <button type="button" disabled={isSubmittingRegister} onClick={() => completeRegistration({ dni })} style={primaryButtonStyle}>
+                  {isSubmittingRegister ? "Registrando..." : "Sí, soy yo · Entrar"}
+                </button>
+                <button type="button" disabled={isSubmittingRegister} onClick={changeDni} style={linkButtonStyle}>
+                  No soy yo, corregir el DNI
+                </button>
               </div>
+            )}
 
-              <label>Correo electrónico *<input aria-label="Correo electrónico" type="email" required maxLength={200} value={email} onChange={(e) => setEmail(e.target.value)} className="yb-mobile-btn" /></label>
-              <label>Número de teléfono *<input aria-label="Número de teléfono" type="tel" required maxLength={50} value={phone} onChange={(e) => setPhone(e.target.value)} className="yb-mobile-btn" /></label>
-              <p>Usaremos estos datos para identificar a los participantes y coordinar la premiación. Tu nombre se mostrará en el ranking. Conserva este navegador para mantener tu participación.</p>
-
-              <button
-                type="submit"
-                disabled={isSubmittingRegister}
-                style={{
-                  marginTop: "0.5rem",
-                  padding: "1.1rem",
-                  borderRadius: "16px",
-                  background: "linear-gradient(135deg, var(--yb-blue) 0%, var(--yb-purple) 100%)",
-                  color: "#fff",
-                  fontWeight: 900,
-                  fontSize: "1.1rem",
-                  border: "none",
-                  cursor: "pointer",
-                  boxShadow: "0 0 30px rgba(0, 111, 245, 0.5)",
-                }}
+            {registerStep === "details" && (
+              <form
+                onSubmit={(e) => { e.preventDefault(); completeRegistration({ dni, fullName, email }); }}
+                style={{ display: "flex", flexDirection: "column", gap: "1.1rem" }}
               >
-                {isSubmittingRegister ? "Registrando..." : "Entrar a la Dinámica"}
-              </button>
-            </form>
+                <p style={{ fontSize: "0.9rem", color: "#cbd5e1", lineHeight: 1.4 }}>
+                  No encontramos el DNI <strong>{dni}</strong> en la inscripción del Fullday. Completa tus datos para participar.
+                </p>
+                <div>
+                  <label htmlFor="yb-name" style={fieldLabelStyle}>Nombres y apellidos *</label>
+                  <input id="yb-name" type="text" required maxLength={200} autoComplete="name" placeholder="Ej. Ana Torres" value={fullName} onChange={(e) => setFullName(e.target.value)} style={fieldInputStyle} />
+                </div>
+                <div>
+                  <label htmlFor="yb-email" style={fieldLabelStyle}>Correo electrónico *</label>
+                  <input id="yb-email" type="email" required maxLength={200} autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} style={fieldInputStyle} />
+                </div>
+                <p style={{ fontSize: "0.85rem", color: "#94a3b8", lineHeight: 1.4 }}>
+                  Usaremos estos datos para identificar a los participantes y coordinar la premiación. Tu nombre se mostrará en el ranking. Conserva este navegador para mantener tu participación.
+                </p>
+                <button type="submit" disabled={isSubmittingRegister} style={primaryButtonStyle}>
+                  {isSubmittingRegister ? "Registrando..." : "Entrar a la Dinámica"}
+                </button>
+                <button type="button" disabled={isSubmittingRegister} onClick={changeDni} style={linkButtonStyle}>
+                  Corregir el DNI
+                </button>
+              </form>
+            )}
           </div>
         ) : (
           /* STEP 2: PARTICIPANT GAME VIEWS */

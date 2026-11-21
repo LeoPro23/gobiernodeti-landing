@@ -1,6 +1,7 @@
 // Partida completa contra un PostgreSQL real (local). Se omite si no se define
 // YAMBOLY_TEST_DATABASE_URL. Borra las tablas del quiz: nunca apuntarla a una base compartida.
-//   YAMBOLY_TEST_DATABASE_URL=postgres://postgres@127.0.0.1:5544/postgres pnpm test
+//   YAMBOLY_TEST_DATABASE_URL=postgres://postgres@127.0.0.1:5544/postgres pnpm test --no-file-parallelism
+// (en serie: con una base en memoria como PGlite, dos archivos escribiendo a la vez se bloquean).
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest"
 
 vi.mock("server-only", () => ({}))
@@ -45,12 +46,45 @@ describe.skipIf(!url)("Yámboly contra PostgreSQL", () => {
     await admin.updateGameSettings({ readingDurationSec: 8, answeringDurationSec: 20, pointsPerCorrect: 5, tieThresholdMs: 1000, difficultySequence: ["FACIL", "INTERMEDIA", "DIFICIL"], allowLateEntry: false }, "test@fullday")
     const categoryId = (await db.getYambolyCategories())[0].id
     await admin.createQuestion(categoryId, { text: "¿Pregunta de desempate?", options: [{ id: "A", text: "Sí" }, { id: "B", text: "No" }], correctOptionId: "A", difficulty: "DIFICIL", isTiebreaker: true }, "test@fullday")
-    for (const name of ["Ana", "Beto", "Caro", "Dani"]) {
-      const p = await db.registerYambolyParticipant({ fullName: name, email: `${name}@test.pe`, phone: "987654321" })
+    // Ana está inscrita en el Fullday: entra solo con su DNI. Los demás escriben nombre y correo.
+    await pool.query("DELETE FROM registrations WHERE dni IN ('40000001', '40000002')")
+    await pool.query(`INSERT INTO registrations (nombres, apellidos, dni, universidad, carrera, ciclo)
+      VALUES ('Ana', 'Torres Ruiz', '40000001', 'UNT', 'Sistemas', 'X'), ('Luis', 'Gómez', '40000002', 'UNT', 'Sistemas', 'X')`)
+    const ana = await db.registerYambolyParticipant({ dni: "40000001", fullName: "Otro nombre", email: "otro@test.pe" })
+    expect(ana).toMatchObject({ full_name: "Ana Torres Ruiz", email: null, dni: "40000001" })
+    players.push({ id: ana.id, token: ana.token })
+    for (const [i, name] of ["Beto", "Caro", "Dani"].entries()) {
+      const p = await db.registerYambolyParticipant({ dni: `5000000${i}`, fullName: name, email: `${name}@test.pe` })
       players.push({ id: p.id, token: p.token })
     }
     const current = await session()
     expect(current).toMatchObject({ points_per_correct: 5, total_rounds: 3, difficulty_sequence: ["FACIL", "INTERMEDIA", "DIFICIL"] })
+  })
+
+  it("registro con DNI: confirma el nombre del Fullday y evita duplicados", async () => {
+    expect(await db.lookupYambolyDni("40000002")).toEqual({ found: true, fullName: "Luis Gómez" })
+    expect(await db.lookupYambolyDni("49999999")).toEqual({ found: false })
+    await expect(db.lookupYambolyDni("40000001")).rejects.toThrow("ya está inscrito")
+    await expect(db.lookupYambolyDni("123")).rejects.toThrow("DNI válido")
+    await expect(db.registerYambolyParticipant({ dni: "50000000", fullName: "Beto bis", email: "x@test.pe" })).rejects.toThrow("DNI ya está inscrito")
+    await expect(db.registerYambolyParticipant({ dni: "50000009", fullName: "Beto bis", email: "BETO@test.pe" })).rejects.toThrow("correo ya está inscrito")
+    await expect(db.registerYambolyParticipant({ dni: "50000009", fullName: "Sin correo" })).rejects.toThrow("Ingresa un correo")
+  })
+
+  it("consola del moderador: lista y busca inscritos, y corrige nombres con historial", async () => {
+    const all = await admin.listQuizParticipants()
+    expect(all).toHaveLength(4)
+    expect(all.find(p => p.dni === "40000001")).toMatchObject({ full_name: "Ana Torres Ruiz", from_fullday: true, email: null })
+    expect((await admin.listQuizParticipants("beto@")).map(p => p.full_name)).toEqual(["Beto"])
+    expect((await admin.listQuizParticipants("5000000")).length).toBe(3)
+
+    const beto = all.find(p => p.full_name === "Beto")!
+    expect(await admin.renameParticipant(beto.id, "  Beto   Ruiz ", "test@fullday")).toBe(true)
+    expect(await admin.renameParticipant(beto.id, "Beto Ruiz", "test@fullday")).toBe(false)
+    await expect(admin.renameParticipant(beto.id, "B", "test@fullday")).rejects.toThrow("nombres y apellidos")
+    expect((await pool.query("SELECT full_name FROM yamboly_participants WHERE id = $1", [beto.id])).rows[0].full_name).toBe("Beto Ruiz")
+    const renamed = (await pool.query("SELECT details FROM yamboly_audit_log WHERE action = 'INSCRITO_RENOMBRADO'")).rows
+    expect(renamed.map(r => r.details)).toEqual([{ antes: "Beto", despues: "Beto Ruiz" }])
   })
 
   it("juega las rondas: la pregunta de desempate nunca sale en la ruleta", async () => {
@@ -129,10 +163,12 @@ describe.skipIf(!url)("Yámboly contra PostgreSQL", () => {
     await act("START_TIEBREAK_QUESTION"); await act("START_ANSWERING")
     const tb = await correctOption()
     await expect(answer(3, tb.questionId, tb.correct)).rejects.toThrow("solo para los participantes empatados")
+    // Durante el desempate no se aceptan inscripciones.
+    await expect(db.registerYambolyParticipant({ dni: "70000000", fullName: "Tarde", email: "tarde@test.pe" })).rejects.toThrow()
   })
 
   it("registra el historial de cambios y acciones", async () => {
     const actions = (await pool.query("SELECT action FROM yamboly_audit_log")).rows.map(r => r.action)
-    expect(actions).toEqual(expect.arrayContaining(["PARAMETROS_ACTUALIZADOS", "PREGUNTA_CREADA", "PREMIO_EDITADO", "MODERADOR_PREPARE_TIEBREAK", "MODERADOR_RESET_GAME"]))
+    expect(actions).toEqual(expect.arrayContaining(["PARAMETROS_ACTUALIZADOS", "PREGUNTA_CREADA", "PREMIO_EDITADO", "MODERADOR_PREPARE_TIEBREAK", "MODERADOR_RESET_GAME", "INSCRITO_RENOMBRADO"]))
   })
 })
