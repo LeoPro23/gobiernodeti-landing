@@ -3,7 +3,7 @@ import { activeFilterEntries, adminPageUrl, getAdminRegistrations, getFilterOpti
 
 const { query, requireAdmin } = vi.hoisted(() => ({ query: vi.fn(), requireAdmin: vi.fn() }))
 vi.mock("server-only", () => ({}))
-vi.mock("@/lib/db", () => ({ getPool: () => ({ query }) }))
+vi.mock("@/lib/db", () => ({ getPool: () => ({ query }), ensureRegistrationTable: vi.fn() }))
 vi.mock("@/lib/admin-auth", () => ({ requireAdmin }))
 
 beforeEach(() => {

@@ -1,5 +1,5 @@
 import "server-only"
-import { getPool } from "@/lib/db"
+import { ensureRegistrationTable, getPool } from "@/lib/db"
 import { requireAdmin } from "@/lib/admin-auth"
 
 export type SearchParams = Record<string, string | string[] | undefined>
@@ -16,6 +16,10 @@ export type Registration = {
   acepta_terminos: boolean
   autoriza_datos: boolean
   created_at: Date | null
+  asistio: boolean
+  origen: string
+  /** Tiene comprobantes de pago de certificado: no se puede quitar la inscripción. */
+  has_payment: boolean
 }
 
 export const PAGE_SIZE = 25
@@ -112,14 +116,16 @@ export async function getFilterOptions(): Promise<FilterOptions> {
 export async function getAdminRegistrations(params: SearchParams) {
   // Authorization belongs at the data access boundary, not only in the UI.
   await requireAdmin()
+  await ensureRegistrationTable()
   const pool = getPool()
   const filters = parseFilters(params)
   const { sql, values } = registrationWhere(filters)
   const [summary, count, options] = await Promise.all([
-    pool.query<{ total: number; today: number; universities: number }>(`
+    pool.query<{ total: number; today: number; universities: number; attended: number }>(`
       SELECT count(*)::int AS total,
         count(*) FILTER (WHERE (created_at AT TIME ZONE 'America/Lima')::date = (now() AT TIME ZONE 'America/Lima')::date)::int AS today,
-        count(DISTINCT universidad)::int AS universities
+        count(DISTINCT universidad)::int AS universities,
+        count(*) FILTER (WHERE asistio)::int AS attended
       FROM registrations`),
     pool.query<{ total: number }>(`SELECT count(*)::int AS total FROM registrations r ${sql}`, values),
     getFilterOptions(),
@@ -129,7 +135,8 @@ export async function getAdminRegistrations(params: SearchParams) {
   const page = Math.min(filters.page, pages)
   const rows = await pool.query<Registration>(`
     SELECT id, nombres, apellidos, dni, universidad, carrera, ciclo, telefono, ciudad,
-      acepta_terminos, autoriza_datos, created_at
+      acepta_terminos, autoriza_datos, created_at, asistio, origen,
+      EXISTS (SELECT 1 FROM registration_payment_images p WHERE p.registration_id = r.id) AS has_payment
     FROM registrations r ${sql}
     ORDER BY created_at DESC NULLS LAST, id DESC
     LIMIT $${values.length + 1} OFFSET $${values.length + 2}`,

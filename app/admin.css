@@ -238,6 +238,28 @@
 .qa-row-editing { background: #eef5ff; }
 .qa-template { display: flex; align-items: end; }
 .qa-json { margin: 6px 0 0; max-width: 520px; max-height: 260px; overflow: auto; padding: 10px; border-radius: 6px; background: #f2f6fb; font-size: 11px; white-space: pre-wrap; word-break: break-word; }
+.qa-page .admin-search input { padding-left: 37px !important; }
+
+/* ---------- Registro de participantes: herramientas de la tabla ---------- */
+.reg-admin-tools { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 0 24px 16px; }
+.reg-admin-create { flex: 1 1 520px; border: 1px solid #c9dcf3; border-radius: 10px; background: #f7fbff; }
+.reg-admin-create > summary, .admin-columns > summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 8px; font-weight: 800; color: var(--admin-ink); }
+.reg-admin-create > summary::-webkit-details-marker, .admin-columns > summary::-webkit-details-marker { display: none; }
+.reg-admin-create > summary { padding: 12px 16px; font-size: 14px; }
+.reg-admin-create .qa-form { padding: 4px 16px 16px; }
+.admin-columns { position: relative; flex: 0 0 auto; margin-left: auto; }
+.admin-columns > summary { min-height: 46px; padding: 0 14px; border: 1px solid var(--admin-line); border-radius: 8px; background: #fff; font-size: 13px; }
+.admin-columns > summary span { color: var(--admin-muted); font-weight: 500; }
+.admin-columns[open] > summary { border-color: var(--admin-blue); color: var(--admin-blue); }
+.admin-columns-menu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 20; width: min(340px, calc(100vw - 32px)); padding: 14px; display: grid; gap: 12px; background: #fff; border: 1px solid var(--admin-line); border-radius: 10px; box-shadow: 0 12px 32px rgba(15, 35, 70, .14); }
+.admin-columns-presets { display: flex; flex-wrap: wrap; gap: 6px; }
+.admin-columns fieldset { border: 0; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; }
+.admin-columns fieldset label { display: flex !important; align-items: center; gap: 8px !important; font-size: 13px !important; font-weight: 500 !important; cursor: pointer; }
+.admin-columns fieldset input { width: 16px; height: 16px; accent-color: var(--admin-blue); }
+@media (max-width: 760px) { .reg-admin-tools { padding-inline: 16px; } }
+.qa-attendance { display: flex !important; flex-direction: column; align-items: center; gap: 6px !important; }
+.qa-attendance input { width: 22px; height: 22px; accent-color: #1d6b4b; cursor: pointer; }
+.qa-attendance input:disabled { cursor: progress; }
 .qa-page code { font-size: 12px; background: #eef3f9; padding: 1px 5px; border-radius: 4px; }
 @media (min-width: 720px) {
   .qa-grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
