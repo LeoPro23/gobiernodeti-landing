@@ -215,7 +215,8 @@ export default function YambolyModeratorPage() {
     nextAction = {
       title: `Lanzar Pregunta de Desempate #${(session.tiebreak_round || 0) + 1} ⚖️`,
       subtitle: `Solo responderán: ${tiebreak?.contenders?.map((p: any) => p.full_name).join(", ")}`,
-      action: "START_READING",
+      // Carga la pregunta adicional (queda en «lista»); luego el moderador inicia la lectura como en cualquier ronda.
+      action: "START_TIEBREAK_QUESTION",
       color: "linear-gradient(135deg, #ffb703 0%, #d97706 100%)",
     };
   } else if (status === "PODIUM") {

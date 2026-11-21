@@ -29,6 +29,26 @@ describe("control manual del moderador", () => {
     expect(JSON.parse(post![1]!.body as string).action.type).toBe("SHOW_QUESTION");
   });
 
+  it("en el desempate, el botón carga la pregunta adicional", async () => {
+    const state = {
+      serverTime: new Date().toISOString(),
+      session: { status: "TIEBREAK", current_round: 5, total_rounds: 5, paused_at: null, tiebreak_round: 0, is_registration_open: false },
+      settings: { readingDurationSec: 8, answeringDurationSec: 20 },
+      participantsCount: 2, answeredCount: 0, playedQuestions: [], remainingPerCategory: [],
+      tiebreak: { required: false, active: true, contenders: [{ id: 1, full_name: "Ana" }, { id: 2, full_name: "Beto" }], groups: [] }, prizePlaces: 1,
+    };
+    const fetchMock = vi.fn(async (_url: string, options?: RequestInit) => ({
+      ok: true,
+      json: async () => options?.method === "POST" ? { success: true } : state,
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    render(<YambolyModeratorPage />);
+    const button = await screen.findByRole("button", { name: /Lanzar Pregunta de Desempate #1/ });
+    await act(async () => { fireEvent.click(button); });
+    const post = fetchMock.mock.calls.find(([, options]) => options?.method === "POST");
+    expect(JSON.parse(post![1]!.body as string).action.type).toBe("START_TIEBREAK_QUESTION");
+  });
+
   it("espera al fin de lectura y no inicia la votación por sí sola", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-11-21T12:00:00Z"));
