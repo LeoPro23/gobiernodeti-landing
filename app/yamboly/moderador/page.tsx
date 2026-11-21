@@ -37,13 +37,13 @@ export default function YambolyModeratorPage() {
   const [data, setData] = useState<any>(null);
   const [isActionLoading, setIsActionLoading] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [autoSequence, setAutoSequence] = useState(true); // Default TRUE for fully automated flow!
+  const [autoSequence, setAutoSequence] = useState(true); // Default TRUE for fully automated flow
   const [showAdvanced, setShowAdvanced] = useState(false);
   const autoTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const fetchState = async () => {
     try {
-      const res = await fetch("/api/yamboly/state");
+      const res = await fetch(`/api/yamboly/state?t=${Date.now()}`, { cache: "no-store" });
       if (res.ok) {
         const json = await res.json();
         setData(json);
@@ -55,78 +55,92 @@ export default function YambolyModeratorPage() {
 
   useEffect(() => {
     fetchState();
-    const interval = setInterval(fetchState, 1200);
+    const interval = setInterval(fetchState, 650);
     return () => clearInterval(interval);
   }, []);
 
-  const triggerAction = async (type: string, payload: any = {}) => {
+  const triggerAction = async (action: string) => {
     setIsActionLoading(true);
     setActionError(null);
     try {
       const res = await fetch("/api/yamboly/admin", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: { type, ...payload },
-        }),
+        body: JSON.stringify({ action: typeof action === "string" ? { type: action } : action }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Error al ejecutar acción");
-      await fetchState();
+      if (json.session) {
+        setData((prev: any) => prev ? ({ ...prev, session: json.session }) : prev);
+      }
+      setIsActionLoading(false);
+      fetchState();
     } catch (err: any) {
-      setActionError(err instanceof Error ? err.message : "No se pudo ejecutar la acción.");
-    } finally {
+      setActionError(err.message);
       setIsActionLoading(false);
     }
   };
 
-  // FULLY AUTOMATED ROUND SEQUENCE ENGINE:
-  // ROULETTE (5s) -> READING (8s) -> ANSWERING (20s) -> REVEAL
+  // Automated sequence transition engine
   useEffect(() => {
-    if (!autoSequence || data?.session?.paused_at || !data?.session) return;
+    if (!autoSequence || !data?.session) return;
     const session = data.session;
     const status = session.status;
+    const readingSec = data.settings?.readingDurationSec ?? 8;
+    const answeringSec = data.settings?.answeringDurationSec ?? 20;
 
-    if (autoTimerRef.current) clearTimeout(autoTimerRef.current);
+    if (autoTimerRef.current) {
+      clearTimeout(autoTimerRef.current);
+      autoTimerRef.current = null;
+    }
+
+    if (session.paused_at) return;
 
     if (status === "ROULETTE") {
-      // Wait 5.5s for roulette animation to stop, then automatically show question (reading)
       autoTimerRef.current = setTimeout(() => {
         triggerAction("START_READING");
-      }, 5500);
+      }, 5400);
     } else if (status === "QUESTION_READING" && session.reading_start_time) {
       const start = new Date(session.reading_start_time).getTime();
+      const duration = readingSec * 1000;
       const elapsed = Date.now() - start;
-      const remaining = Math.max(200, session.reading_duration_sec * 1000 - elapsed);
+      const remaining = Math.max(0, duration - elapsed);
+
       autoTimerRef.current = setTimeout(() => {
         triggerAction("START_ANSWERING");
-      }, remaining);
+      }, remaining + 200);
     } else if (status === "QUESTION_ANSWERING" && session.answering_start_time) {
       const start = new Date(session.answering_start_time).getTime();
+      const duration = answeringSec * 1000;
       const elapsed = Date.now() - start;
-      const remaining = Math.max(200, session.answering_duration_sec * 1000 - elapsed);
+      const remaining = Math.max(0, duration - elapsed);
+
       autoTimerRef.current = setTimeout(() => {
         triggerAction("REVEAL_ANSWER");
-      }, remaining);
+      }, remaining + 300);
     }
 
     return () => {
       if (autoTimerRef.current) clearTimeout(autoTimerRef.current);
     };
   }, [
-    autoSequence, 
+    autoSequence,
+    data?.session?.status,
+    data?.session?.reading_start_time,
+    data?.session?.answering_start_time,
     data?.session?.paused_at,
-    data?.session?.status, 
-    data?.session?.reading_start_time, 
-    data?.session?.answering_start_time
+    data?.settings?.readingDurationSec,
+    data?.settings?.answeringDurationSec,
   ]);
 
   if (!data) {
     return (
-      <div className="yb-root" style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <div style={{ textAlign: "center" }}>
-          <div className="yb-badge-live" style={{ marginBottom: "1rem" }}>CONSOLA DEL DIRECTOR</div>
-          <h2 style={{ fontSize: "1.3rem", fontWeight: 700 }}>Conectando consola...</h2>
+      <div className="yb-root" style={{ display: "flex", alignItems: "center", justifyContent: "center" }} suppressHydrationWarning>
+        <div style={{ textAlign: "center" }} suppressHydrationWarning>
+          <div className="yb-badge-live" style={{ marginBottom: "1rem" }} suppressHydrationWarning>CONECTANDO A DIRECCIÓN</div>
+          <h2 style={{ fontSize: "1.4rem", fontWeight: 800, color: "var(--yb-text-title)" }} suppressHydrationWarning>
+            Cargando Consola del Moderador...
+          </h2>
         </div>
       </div>
     );
@@ -145,7 +159,6 @@ export default function YambolyModeratorPage() {
   const PHASES = buildPhases(readingSec, answeringSec);
 
   const participantsCount = Number(data.participantsCount || 0);
-  // Durante el desempate solo responden los participantes empatados.
   const expectedAnswers = inTiebreak ? tiebreak?.contenders?.length || 0 : participantsCount;
   const answeredCount = Number(data.answeredCount || 0);
   const responseRate = expectedAnswers > 0 ? Math.round((answeredCount / expectedAnswers) * 100) : 0;
@@ -158,7 +171,7 @@ export default function YambolyModeratorPage() {
     title: "Iniciar Dinámica y Girar Ruleta",
     subtitle: `Comenzar Ronda 1 de ${totalRounds}`,
     action: "SPIN_ROULETTE",
-    color: "linear-gradient(135deg, #006ff5 0%, #ae1df5 100%)",
+    color: "linear-gradient(135deg, var(--yb-primary) 0%, var(--yb-cyan) 100%)",
   };
 
   if (status === "WAITING_REGISTRATION") {
@@ -166,35 +179,35 @@ export default function YambolyModeratorPage() {
       title: "Cerrar Inscripción & Girar Ruleta 🎡",
       subtitle: `Inicia la secuencia automática de la Ronda ${currentRound + 1}`,
       action: "SPIN_ROULETTE",
-      color: "linear-gradient(135deg, #ff007a 0%, #ae1df5 100%)",
+      color: "linear-gradient(135deg, var(--yb-primary) 0%, #c00067 100%)",
     };
   } else if (status === "ROULETTE") {
     nextAction = {
       title: autoSequence ? "Sorteando... (Avanza solo a Lectura) ⏳" : `Lanzar Pregunta (${readingSec}s Lectura) 📖`,
       subtitle: autoSequence ? "El temporizador automático pasará a lectura en breve" : "Muestra la pregunta en pantalla",
       action: "START_READING",
-      color: "linear-gradient(135deg, #7928ca 0%, #006ff5 100%)",
+      color: "linear-gradient(135deg, #8b5cf6 0%, #0077e6 100%)",
     };
   } else if (status === "QUESTION_READING") {
     nextAction = {
       title: autoSequence ? "Lectura en curso... (Abrirá votación solo) ⏳" : `Habilitar Votación Ahora (${answeringSec}s) ⚡`,
       subtitle: autoSequence ? "Al llegar a 0s se desbloquearán los celulares" : "Desbloquea los botones en móviles",
       action: "START_ANSWERING",
-      color: "linear-gradient(135deg, #00f59b 0%, #00b4d8 100%)",
+      color: "linear-gradient(135deg, #10b981 0%, #00a3e0 100%)",
     };
   } else if (status === "QUESTION_ANSWERING") {
     nextAction = {
       title: autoSequence ? `Votando... (${answeredCount} de ${expectedAnswers} votos) ⚡` : "Cerrar Votación y Revelar ✓",
       subtitle: autoSequence ? `Se revelará solo al terminar los ${answeringSec} segundos` : `${answeredCount} de ${expectedAnswers} votos recibidos (${responseRate}%)`,
       action: "REVEAL_ANSWER",
-      color: "linear-gradient(135deg, #006ff5 0%, #42dcff 100%)",
+      color: "linear-gradient(135deg, #0077e6 0%, #00a3e0 100%)",
     };
   } else if (status === "QUESTION_REVEAL") {
     nextAction = {
       title: inTiebreak ? "Ver Resultado del Desempate ⚖️" : "Proyectar Tabla de Posiciones 🏆",
       subtitle: inTiebreak ? "Actualiza la clasificación con la pregunta de desempate" : `Ranking acumulado tras la Ronda ${currentRound}`,
       action: "SHOW_ROUND_RANKING",
-      color: "linear-gradient(135deg, #ffb703 0%, #f77f00 100%)",
+      color: "linear-gradient(135deg, #ffb703 0%, #f97316 100%)",
     };
   } else if (status === "ROUND_RANKING") {
     if (currentRound < totalRounds) {
@@ -202,70 +215,57 @@ export default function YambolyModeratorPage() {
         title: `Avanzar a Ronda ${currentRound + 1} & Girar Ruleta 🎡`,
         subtitle: `Quedan ${totalRounds - currentRound} rondas por jugar`,
         action: "SPIN_ROULETTE",
-        color: "linear-gradient(135deg, #ff007a 0%, #ae1df5 100%)",
+        color: "linear-gradient(135deg, var(--yb-primary) 0%, #8b5cf6 100%)",
       };
     } else if (tiebreak?.required) {
       nextAction = {
         title: inTiebreak ? "Nuevo Desempate: Siguen Empatados ⚖️" : "Iniciar Desempate ⚖️",
         subtitle: `Empate técnico en puestos premiados: ${tiebreak.groups.map((g: any) => g.participants.map((p: any) => p.full_name).join(" vs ")).join(" · ")}`,
         action: "PREPARE_TIEBREAK",
-        color: "linear-gradient(135deg, #ffb703 0%, #ff007a 100%)",
+        color: "linear-gradient(135deg, #ffb703 0%, var(--yb-primary) 100%)",
       };
     } else {
       nextAction = {
         title: "Proclamar Ganadores y Mostrar Podio Final 👑",
         subtitle: `Entrega oficial de ${prizePlaces === 1 ? "1 premio" : `${prizePlaces} premios`} Yámboly`,
         action: "SHOW_PODIUM",
-        color: "linear-gradient(135deg, #ffb703 0%, #e63946 100%)",
+        color: "linear-gradient(135deg, #ffb703 0%, #ef4444 100%)",
       };
     }
   } else if (status === "TIEBREAK") {
     nextAction = {
-      title: "Lanzar Pregunta de Desempate ⚡",
-      subtitle: `Solo responden ${tiebreak?.contenders?.length || 0} participantes empatados · sin puntos, decide el orden`,
-      action: "START_TIEBREAK_QUESTION",
-      color: "linear-gradient(135deg, #ff007a 0%, #ffb703 100%)",
+      title: `Lanzar Pregunta de Desempate #${(session.tiebreak_round || 0) + 1} ⚖️`,
+      subtitle: `Solo responderán: ${tiebreak?.contenders?.map((p: any) => p.full_name).join(", ")}`,
+      action: "START_READING",
+      color: "linear-gradient(135deg, #ffb703 0%, #d97706 100%)",
     };
   } else if (status === "PODIUM") {
     nextAction = {
-      title: "Dinámica Finalizada 🎉",
-      subtitle: "Podio visible en pantalla de auditorio",
+      title: "Podio Publicado Oficialmente 🏆",
+      subtitle: "Juego finalizado. ¡Felicitaciones a los ganadores!",
       action: "SHOW_PODIUM",
-      color: "linear-gradient(135deg, #00f59b 0%, #006ff5 100%)",
+      color: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
     };
   }
 
   return (
-    <div className="yb-root" style={{ padding: "1.25rem", minHeight: "100vh" }}>
-      <div style={{ maxWidth: "1280px", margin: "0 auto" }}>
-        
-        {/* TOP STATUS BAR */}
-        <header
-          className="yb-hud-panel"
-          style={{
-            padding: "1rem 1.75rem",
-            marginBottom: "1.25rem",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            flexWrap: "wrap",
-            gap: "1rem",
-            borderLeft: "5px solid var(--yb-cyan)",
-          }}
-        >
+    <div className="yb-root" suppressHydrationWarning>
+      <div className="yb-container">
+        {/* Top Header */}
+        <header className="yb-header">
           <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src="/images/sponsor/yamboli.jpg"
               alt="Logo Yámboly"
-              style={{ height: "42px", width: "auto", borderRadius: "8px", objectFit: "contain", background: "#fff", padding: "2px" }}
+              className="yb-brand-logo"
             />
             <div>
               <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                 <span className="yb-badge-live">CONSOLA DEL DIRECTOR</span>
-                <span style={{ fontSize: "0.85rem", color: "#94a3b8" }}>· Yámboly Quiz Master</span>
+                <span style={{ fontSize: "0.85rem", color: "var(--yb-text-muted)" }}>· Yámboly Quiz Master</span>
               </div>
-              <h1 style={{ fontSize: "1.35rem", fontWeight: 900, color: "#fff", marginTop: "4px" }}>
+              <h1 style={{ fontSize: "1.35rem", fontWeight: 900, color: "var(--yb-text-title)", marginTop: "4px" }}>
                 Control de Transmisión en Vivo
               </h1>
             </div>
@@ -273,14 +273,16 @@ export default function YambolyModeratorPage() {
 
           <div style={{ display: "flex", alignItems: "center", gap: "1.5rem" }}>
             <div style={{ textAlign: "center" }}>
-              <div style={{ fontSize: "0.7rem", color: "#94a3b8", fontWeight: 700, letterSpacing: "1px" }}>{inTiebreak ? "DESEMPATE" : "RONDA"}</div>
-              <div style={{ fontSize: "1.3rem", fontWeight: 900, color: inTiebreak ? "var(--yb-gold)" : "var(--yb-cyan)" }}>
-                {inTiebreak ? `#${session.tiebreak_round}` : <>{currentRound} <span style={{ fontSize: "0.85rem", color: "#64748b" }}>/ {totalRounds}</span></>}
+              <div style={{ fontSize: "0.7rem", color: "var(--yb-text-muted)", fontWeight: 700, letterSpacing: "1px" }}>
+                {inTiebreak ? "DESEMPATE" : "RONDA"}
+              </div>
+              <div style={{ fontSize: "1.3rem", fontWeight: 900, color: inTiebreak ? "var(--yb-gold)" : "var(--yb-primary)" }}>
+                {inTiebreak ? `#${session.tiebreak_round}` : <>{currentRound} <span style={{ fontSize: "0.85rem", color: "var(--yb-text-muted)" }}>/ {totalRounds}</span></>}
               </div>
             </div>
 
             <div style={{ textAlign: "center" }}>
-              <div style={{ fontSize: "0.7rem", color: "#94a3b8", fontWeight: 700, letterSpacing: "1px" }}>INSCRITOS</div>
+              <div style={{ fontSize: "0.7rem", color: "var(--yb-text-muted)", fontWeight: 700, letterSpacing: "1px" }}>INSCRITOS</div>
               <div style={{ fontSize: "1.3rem", fontWeight: 900, color: "var(--yb-green)" }}>
                 {participantsCount}
               </div>
@@ -288,9 +290,9 @@ export default function YambolyModeratorPage() {
 
             {status === "QUESTION_ANSWERING" && (
               <div style={{ textAlign: "center" }}>
-                <div style={{ fontSize: "0.7rem", color: "#94a3b8", fontWeight: 700, letterSpacing: "1px" }}>RESPUESTAS</div>
-                <div style={{ fontSize: "1.3rem", fontWeight: 900, color: "var(--yb-pink)" }}>
-                  {answeredCount} <span style={{ fontSize: "0.85rem", color: "#94a3b8" }}>({responseRate}%)</span>
+                <div style={{ fontSize: "0.7rem", color: "var(--yb-text-muted)", fontWeight: 700, letterSpacing: "1px" }}>RESPUESTAS</div>
+                <div style={{ fontSize: "1.3rem", fontWeight: 900, color: "var(--yb-primary)" }}>
+                  {answeredCount} <span style={{ fontSize: "0.85rem", color: "var(--yb-text-muted)" }}>({responseRate}%)</span>
                 </div>
               </div>
             )}
@@ -301,14 +303,15 @@ export default function YambolyModeratorPage() {
               style={{
                 padding: "0.6rem 1.1rem",
                 borderRadius: "12px",
-                background: "rgba(255, 255, 255, 0.06)",
-                border: "1px solid rgba(255,255,255,0.15)",
-                color: "#cbd5e1",
+                background: "#ffffff",
+                border: "1.5px solid rgba(148, 163, 184, 0.3)",
+                color: "var(--yb-text-title)",
                 fontWeight: 800,
                 fontSize: "0.85rem",
                 display: "inline-flex",
                 alignItems: "center",
                 gap: "6px",
+                boxShadow: "0 2px 6px rgba(0,0,0,0.04)",
               }}
             >
               <Settings2 size={15} /> Banco y premios ↗
@@ -320,9 +323,9 @@ export default function YambolyModeratorPage() {
               style={{
                 padding: "0.6rem 1.25rem",
                 borderRadius: "12px",
-                background: "rgba(0, 111, 245, 0.2)",
-                border: "1px solid var(--yb-border)",
-                color: "var(--yb-cyan)",
+                background: "linear-gradient(135deg, rgba(230, 0, 126, 0.1) 0%, rgba(0, 163, 224, 0.1) 100%)",
+                border: "1.5px solid rgba(230, 0, 126, 0.3)",
+                color: "var(--yb-primary)",
                 fontWeight: 800,
                 fontSize: "0.85rem",
                 display: "inline-flex",
@@ -338,20 +341,20 @@ export default function YambolyModeratorPage() {
         {/* STEP PIPELINE TRACK */}
         <div className="yb-hud-panel" style={{ padding: "1.25rem 1.5rem", marginBottom: "1.5rem" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1rem" }}>
-            <span style={{ fontSize: "0.85rem", fontWeight: 800, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "1px" }}>
+            <span style={{ fontSize: "0.85rem", fontWeight: 800, color: "var(--yb-text-muted)", textTransform: "uppercase", letterSpacing: "1px" }}>
               Línea de Tiempo del Juego
             </span>
 
             {/* Auto Sequence Toggle and Pause Switch */}
             <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
-              <label style={{ display: "inline-flex", alignItems: "center", gap: "8px", cursor: "pointer", fontSize: "0.85rem", color: "#cbd5e1" }}>
+              <label style={{ display: "inline-flex", alignItems: "center", gap: "8px", cursor: "pointer", fontSize: "0.85rem", color: "var(--yb-text-body)" }}>
                 <input
                   type="checkbox"
                   checked={autoSequence}
                   onChange={(e) => setAutoSequence(e.target.checked)}
-                  style={{ width: "16px", height: "16px", accentColor: "var(--yb-cyan)" }}
+                  style={{ width: "16px", height: "16px", accentColor: "var(--yb-primary)" }}
                 />
-                <span style={{ fontWeight: autoSequence ? 800 : 500, color: autoSequence ? "var(--yb-green)" : "#94a3b8" }}>
+                <span style={{ fontWeight: autoSequence ? 800 : 500, color: autoSequence ? "var(--yb-green)" : "var(--yb-text-muted)" }}>
                   ⚡ Secuencia 100% Automática (Ruleta → {readingSec}s Lectura → {answeringSec}s Voto → Revelación)
                 </span>
               </label>
@@ -362,9 +365,9 @@ export default function YambolyModeratorPage() {
                   style={{
                     padding: "4px 12px",
                     borderRadius: "8px",
-                    background: isPaused ? "rgba(0, 245, 155, 0.2)" : "rgba(255, 183, 3, 0.2)",
+                    background: isPaused ? "rgba(16, 185, 129, 0.15)" : "rgba(255, 183, 3, 0.18)",
                     border: `1px solid ${isPaused ? "var(--yb-green)" : "var(--yb-gold)"}`,
-                    color: isPaused ? "var(--yb-green)" : "var(--yb-gold)",
+                    color: isPaused ? "#065f46" : "#b45309",
                     fontSize: "0.8rem",
                     fontWeight: 800,
                     cursor: "pointer",
@@ -396,29 +399,30 @@ export default function YambolyModeratorPage() {
                   }}
                   style={{
                     padding: "0.75rem",
-                    borderRadius: "14px",
+                    borderRadius: "16px",
                     background: isCurrent
-                      ? "rgba(0, 111, 245, 0.25)"
+                      ? "linear-gradient(135deg, rgba(230, 0, 126, 0.12) 0%, rgba(0, 163, 224, 0.12) 100%)"
                       : isPast
-                      ? "rgba(0, 245, 155, 0.08)"
-                      : "rgba(255, 255, 255, 0.03)",
+                      ? "rgba(16, 185, 129, 0.1)"
+                      : "#ffffff",
                     border: `1.5px solid ${
-                      isCurrent ? "var(--yb-cyan)" : isPast ? "rgba(0, 245, 155, 0.4)" : "rgba(255, 255, 255, 0.08)"
+                      isCurrent ? "var(--yb-primary)" : isPast ? "rgba(16, 185, 129, 0.4)" : "rgba(148, 163, 184, 0.25)"
                     }`,
                     cursor: "pointer",
                     transition: "all 0.2s ease",
+                    boxShadow: isCurrent ? "0 4px 14px rgba(230, 0, 126, 0.15)" : "none",
                   }}
                 >
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "4px" }}>
-                    <Icon size={18} color={isCurrent ? "var(--yb-cyan)" : isPast ? "var(--yb-green)" : "#64748b"} />
-                    <span style={{ fontSize: "0.7rem", fontWeight: 800, color: isCurrent ? "var(--yb-cyan)" : "#64748b" }}>
+                    <Icon size={18} color={isCurrent ? "var(--yb-primary)" : isPast ? "var(--yb-green)" : "#64748b"} />
+                    <span style={{ fontSize: "0.7rem", fontWeight: 800, color: isCurrent ? "var(--yb-primary)" : "#64748b" }}>
                       #{idx + 1}
                     </span>
                   </div>
-                  <div style={{ fontSize: "0.85rem", fontWeight: 800, color: isCurrent ? "#fff" : isPast ? "#cbd5e1" : "#64748b" }}>
+                  <div style={{ fontSize: "0.85rem", fontWeight: 800, color: isCurrent ? "var(--yb-text-title)" : isPast ? "var(--yb-text-title)" : "#64748b" }}>
                     {phase.label}
                   </div>
-                  <div style={{ fontSize: "0.7rem", color: "#94a3b8", marginTop: "2px" }}>
+                  <div style={{ fontSize: "0.7rem", color: "var(--yb-text-muted)", marginTop: "2px" }}>
                     {phase.desc}
                   </div>
                 </div>
@@ -427,20 +431,20 @@ export default function YambolyModeratorPage() {
           </div>
         </div>
 
-        {/* HERO COMMAND SECTION (THE ONE SMART BUTTON) */}
-        {actionError && <p role="alert" style={{ color: "#ff8da8", marginBottom: "1rem" }}>{actionError}</p>}
+        {/* HERO COMMAND SECTION */}
+        {actionError && <p role="alert" style={{ color: "var(--yb-red)", marginBottom: "1rem" }}>{actionError}</p>}
         <div
           className="yb-hud-panel"
           style={{
             padding: "2.5rem 2rem",
             marginBottom: "1.5rem",
             textAlign: "center",
-            background: "linear-gradient(180deg, rgba(6, 25, 52, 0.9) 0%, rgba(2, 11, 25, 0.98) 100%)",
-            border: "1.5px solid var(--yb-border)",
-            boxShadow: "0 25px 60px rgba(0, 0, 0, 0.6)",
+            background: "linear-gradient(135deg, #ffffff 0%, #fff1f7 50%, #f0f9ff 100%)",
+            border: "2px solid rgba(230, 0, 126, 0.25)",
+            boxShadow: "0 14px 40px rgba(230, 0, 126, 0.12)",
           }}
         >
-          <div style={{ fontSize: "0.85rem", color: "var(--yb-cyan)", fontWeight: 800, textTransform: "uppercase", letterSpacing: "2px", marginBottom: "0.75rem" }}>
+          <div style={{ fontSize: "0.85rem", color: "var(--yb-primary)", fontWeight: 800, textTransform: "uppercase", letterSpacing: "2px", marginBottom: "0.75rem" }}>
             {autoSequence && (status === "ROULETTE" || status === "QUESTION_READING" || status === "QUESTION_ANSWERING")
               ? "⚡ Secuencia Automática en Marcha (Sin presionar nada)"
               : "Control de Avance"}
@@ -458,7 +462,7 @@ export default function YambolyModeratorPage() {
               fontWeight: 900,
               border: "none",
               cursor: status === "PODIUM" ? "default" : "pointer",
-              boxShadow: "0 12px 35px rgba(0, 111, 245, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.3)",
+              boxShadow: "0 12px 35px rgba(230, 0, 126, 0.35)",
               display: "inline-flex",
               alignItems: "center",
               gap: "12px",
@@ -468,13 +472,13 @@ export default function YambolyModeratorPage() {
             <ArrowRight size={24} />
           </button>
 
-          <div style={{ fontSize: "1rem", color: "#94a3b8", marginTop: "0.85rem", fontWeight: 600 }}>
+          <div style={{ fontSize: "1rem", color: "var(--yb-text-body)", marginTop: "0.85rem", fontWeight: 600 }}>
             {nextAction.subtitle}
           </div>
 
           {/* Quick toggle for registration */}
-          <div style={{ marginTop: "1.5rem", display: "inline-flex", alignItems: "center", gap: "1rem", background: "rgba(255,255,255,0.05)", padding: "6px 16px", borderRadius: "999px" }}>
-            <span style={{ fontSize: "0.85rem", color: "#cbd5e1" }}>
+          <div style={{ marginTop: "1.5rem", display: "inline-flex", alignItems: "center", gap: "1rem", background: "#ffffff", padding: "6px 18px", borderRadius: "999px", border: "1px solid rgba(148, 163, 184, 0.3)" }}>
+            <span style={{ fontSize: "0.85rem", color: "var(--yb-text-body)" }}>
               Estado del Registro QR: <strong>{session.is_registration_open ? "Abierto 🟢" : "Cerrado 🔴"}</strong>
             </span>
             <button
@@ -482,7 +486,7 @@ export default function YambolyModeratorPage() {
               style={{
                 background: "none",
                 border: "none",
-                color: "var(--yb-cyan)",
+                color: "var(--yb-primary)",
                 fontWeight: 800,
                 fontSize: "0.85rem",
                 textDecoration: "underline",
@@ -501,15 +505,15 @@ export default function YambolyModeratorPage() {
             style={{
               padding: "1.5rem 1.75rem",
               marginBottom: "1.5rem",
-              borderLeft: `5px solid ${tiebreak?.required || phaseId === "TIEBREAK" ? "var(--yb-gold)" : "var(--yb-green)"}`,
+              borderLeft: `6px solid ${tiebreak?.required || phaseId === "TIEBREAK" ? "var(--yb-gold)" : "var(--yb-green)"}`,
             }}
           >
             <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "0.75rem" }}>
               <Scale size={20} color="var(--yb-gold)" />
-              <h2 style={{ fontSize: "1.1rem", fontWeight: 900 }}>Estado de la premiación</h2>
+              <h2 style={{ fontSize: "1.1rem", fontWeight: 900, color: "var(--yb-text-title)" }}>Estado de la premiación</h2>
             </div>
             {phaseId === "TIEBREAK" ? (
-              <p style={{ color: "#cbd5e1" }}>
+              <p style={{ color: "var(--yb-text-body)" }}>
                 Desempate en curso entre:{" "}
                 <strong>{tiebreak?.contenders?.map((p: any) => p.full_name).join(", ")}</strong>. Gana quien acierte; entre
                 quienes aciertan, el más rápido. Menos de {(settings?.tieThresholdMs ?? 1000) / 1000}s de diferencia sigue
@@ -518,14 +522,14 @@ export default function YambolyModeratorPage() {
             ) : tiebreak?.required ? (
               <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
                 {tiebreak.groups.map((group: any) => (
-                  <p key={group.fromPosition} style={{ color: "#cbd5e1" }}>
-                    <strong style={{ color: "var(--yb-gold)" }}>
+                  <p key={group.fromPosition} style={{ color: "var(--yb-text-body)" }}>
+                    <strong style={{ color: "#b45309" }}>
                       Puestos {group.fromPosition}–{group.toPosition}:
                     </strong>{" "}
                     {group.participants.map((p: any) => p.full_name).join(" · ")}
                   </p>
                 ))}
-                <p style={{ color: "#94a3b8", fontSize: "0.85rem" }}>
+                <p style={{ color: "var(--yb-text-muted)", fontSize: "0.85rem" }}>
                   Empate técnico: mismos puntos y aciertos por dificultad, y menos de{" "}
                   {(settings?.tieThresholdMs ?? 1000) / 1000}s de diferencia. Inicia el desempate para definir los premios.
                 </p>
@@ -540,15 +544,14 @@ export default function YambolyModeratorPage() {
 
         {/* MIDDLE SECTION: ACTIVE QUESTION & ROULETTE POOL HISTORY */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))", gap: "1.5rem", marginBottom: "1.5rem" }}>
-          
           {/* Active Question Telemetry */}
           <div className="yb-hud-panel" style={{ padding: "1.75rem" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1rem" }}>
-              <h2 style={{ fontSize: "1.15rem", fontWeight: 800, color: inTiebreak ? "var(--yb-gold)" : "var(--yb-cyan)" }}>
+              <h2 style={{ fontSize: "1.15rem", fontWeight: 800, color: inTiebreak ? "#d97706" : "var(--yb-primary)" }}>
                 {inTiebreak ? `Pregunta de Desempate #${session.tiebreak_round}` : "Pregunta en Pantalla"}
               </h2>
               {currentQuestion && (
-                <span style={{ fontSize: "0.75rem", padding: "4px 10px", borderRadius: "999px", background: "rgba(255,255,255,0.1)", color: "#fff", fontWeight: 700 }}>
+                <span style={{ fontSize: "0.75rem", padding: "4px 12px", borderRadius: "999px", background: "#f1f5f9", color: "var(--yb-text-body)", fontWeight: 800, border: "1px solid rgba(148,163,184,0.3)" }}>
                   Dificultad: {currentQuestion.difficulty}
                 </span>
               )}
@@ -559,7 +562,7 @@ export default function YambolyModeratorPage() {
                 <div style={{ fontSize: "0.85rem", color: currentQuestion.category_color, fontWeight: 800, marginBottom: "6px" }}>
                   {currentQuestion.category_name}
                 </div>
-                <div style={{ fontSize: "1.15rem", fontWeight: 700, marginBottom: "1.25rem", lineHeight: 1.4 }}>
+                <div style={{ fontSize: "1.15rem", fontWeight: 700, marginBottom: "1.25rem", lineHeight: 1.4, color: "var(--yb-text-title)" }}>
                   {currentQuestion.text}
                 </div>
 
@@ -575,9 +578,9 @@ export default function YambolyModeratorPage() {
                         key={opt.id}
                         style={{
                           padding: "0.75rem 1rem",
-                          borderRadius: "10px",
-                          background: isCorrect ? "rgba(0, 245, 155, 0.15)" : "rgba(255,255,255,0.03)",
-                          border: `1px solid ${isCorrect ? "var(--yb-green)" : "rgba(255,255,255,0.08)"}`,
+                          borderRadius: "12px",
+                          background: isCorrect ? "#ecfdf5" : "#ffffff",
+                          border: `1.5px solid ${isCorrect ? "var(--yb-green)" : "rgba(148, 163, 184, 0.25)"}`,
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "space-between",
@@ -585,19 +588,19 @@ export default function YambolyModeratorPage() {
                           fontSize: "0.9rem",
                         }}
                       >
-                        <div>
-                          <strong style={{ color: isCorrect ? "var(--yb-green)" : "var(--yb-cyan)" }}>
+                        <div style={{ color: "var(--yb-text-title)" }}>
+                          <strong style={{ color: isCorrect ? "var(--yb-green)" : "var(--yb-primary)" }}>
                             {opt.id}.
                           </strong>{" "}
                           {opt.text}
                         </div>
                         {isCorrect && (
-                          <span style={{ padding: "2px 8px", borderRadius: "6px", background: "var(--yb-green)", color: "#000", fontWeight: 900, fontSize: "0.7rem" }}>
+                          <span style={{ padding: "2px 8px", borderRadius: "6px", background: "var(--yb-green)", color: "#ffffff", fontWeight: 900, fontSize: "0.7rem" }}>
                             CORRECTA
                           </span>
                         )}
                         {status === "QUESTION_REVEAL" && (
-                          <span style={{ fontSize: "0.8rem", color: "#94a3b8", fontWeight: 700 }}>
+                          <span style={{ fontSize: "0.8rem", color: "var(--yb-text-muted)", fontWeight: 700 }}>
                             {votes} ({pct}%)
                           </span>
                         )}
@@ -607,7 +610,7 @@ export default function YambolyModeratorPage() {
                 </div>
               </div>
             ) : (
-              <div style={{ textAlign: "center", padding: "2.5rem 1rem", color: "#64748b" }}>
+              <div style={{ textAlign: "center", padding: "2.5rem 1rem", color: "var(--yb-text-muted)" }}>
                 Sin pregunta activa. Al presionar <strong>Girar Ruleta</strong> se elegirá una categoría y pregunta del banco.
               </div>
             )}
@@ -615,10 +618,10 @@ export default function YambolyModeratorPage() {
 
           {/* Categories in Roulette Pool (Used vs Remaining) */}
           <div className="yb-hud-panel" style={{ padding: "1.75rem" }}>
-            <h2 style={{ fontSize: "1.15rem", fontWeight: 800, color: "var(--yb-gold)", marginBottom: "1rem" }}>
+            <h2 style={{ fontSize: "1.15rem", fontWeight: 800, color: "var(--yb-primary)", marginBottom: "1rem" }}>
               Estado del Banco de la Ruleta
             </h2>
-            <p style={{ fontSize: "0.85rem", color: "#94a3b8", marginBottom: "1rem" }}>
+            <p style={{ fontSize: "0.85rem", color: "var(--yb-text-muted)", marginBottom: "1rem" }}>
               Las categorías ya jugadas se descartan automáticamente de la ruleta:
             </p>
 
@@ -632,15 +635,15 @@ export default function YambolyModeratorPage() {
                     key={cat.id}
                     style={{
                       padding: "0.6rem 1rem",
-                      borderRadius: "10px",
-                      background: isExhausted ? "rgba(255, 51, 102, 0.08)" : "rgba(255,255,255,0.04)",
-                      border: `1px solid ${isExhausted ? "rgba(255, 51, 102, 0.3)" : "rgba(255,255,255,0.08)"}`,
+                      borderRadius: "12px",
+                      background: isExhausted ? "#fef2f2" : "#ffffff",
+                      border: `1.5px solid ${isExhausted ? "rgba(239, 68, 68, 0.3)" : "rgba(148, 163, 184, 0.25)"}`,
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "space-between",
                     }}
                   >
-                    <span style={{ fontSize: "0.9rem", fontWeight: 700, color: isExhausted ? "#94a3b8" : "#fff" }}>
+                    <span style={{ fontSize: "0.9rem", fontWeight: 700, color: isExhausted ? "var(--yb-text-muted)" : "var(--yb-text-title)" }}>
                       {cat.name}
                     </span>
                     <span
@@ -649,7 +652,7 @@ export default function YambolyModeratorPage() {
                         fontWeight: 800,
                         padding: "2px 10px",
                         borderRadius: "999px",
-                        background: isExhausted ? "rgba(255, 51, 102, 0.2)" : "rgba(0, 111, 245, 0.2)",
+                        background: isExhausted ? "rgba(239, 68, 68, 0.15)" : "rgba(0, 163, 224, 0.12)",
                         color: isExhausted ? "var(--yb-red)" : "var(--yb-cyan)",
                       }}
                     >
@@ -662,13 +665,13 @@ export default function YambolyModeratorPage() {
 
             {/* Questions Played History */}
             {playedQuestions?.length > 0 && (
-              <div style={{ marginTop: "1.25rem", borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: "1rem" }}>
-                <div style={{ fontSize: "0.75rem", color: "#94a3b8", fontWeight: 800, textTransform: "uppercase" }}>
+              <div style={{ marginTop: "1.25rem", borderTop: "1px solid rgba(148, 163, 184, 0.2)", paddingTop: "1rem" }}>
+                <div style={{ fontSize: "0.75rem", color: "var(--yb-text-muted)", fontWeight: 800, textTransform: "uppercase" }}>
                   Preguntas ya jugadas ({playedQuestions.length}):
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem", marginTop: "0.5rem" }}>
                   {playedQuestions.map((pq: any, i: number) => (
-                    <div key={pq.id} style={{ fontSize: "0.8rem", color: "#cbd5e1" }}>
+                    <div key={pq.id} style={{ fontSize: "0.8rem", color: "var(--yb-text-body)" }}>
                       ✓ <strong>Ronda {i + 1} ({pq.category_name}):</strong> {pq.text.slice(0, 50)}...
                     </div>
                   ))}
@@ -682,8 +685,8 @@ export default function YambolyModeratorPage() {
         <div className="yb-hud-panel" style={{ padding: "1.25rem 1.5rem" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <ShieldAlert size={18} color="#94a3b8" />
-              <span style={{ fontSize: "0.9rem", fontWeight: 700, color: "#cbd5e1" }}>
+              <ShieldAlert size={18} color="var(--yb-text-muted)" />
+              <span style={{ fontSize: "0.9rem", fontWeight: 700, color: "var(--yb-text-title)" }}>
                 Zona de Seguridad & Reinicio de Emergencia
               </span>
             </div>
@@ -692,7 +695,7 @@ export default function YambolyModeratorPage() {
               style={{
                 background: "none",
                 border: "none",
-                color: "var(--yb-cyan)",
+                color: "var(--yb-primary)",
                 fontSize: "0.85rem",
                 fontWeight: 700,
                 cursor: "pointer",
@@ -703,8 +706,8 @@ export default function YambolyModeratorPage() {
           </div>
 
           {showAdvanced && (
-            <div style={{ marginTop: "1.25rem", paddingTop: "1.25rem", borderTop: "1px solid rgba(255,255,255,0.08)" }}>
-              <p style={{ fontSize: "0.85rem", color: "#94a3b8", marginBottom: "1rem" }}>
+            <div style={{ marginTop: "1.25rem", paddingTop: "1.25rem", borderTop: "1px solid rgba(148, 163, 184, 0.2)" }}>
+              <p style={{ fontSize: "0.85rem", color: "var(--yb-text-muted)", marginBottom: "1rem" }}>
                 Si necesitás reiniciar la partida a cero para un ensayo o borrar puntajes de prueba:
               </p>
               <button
@@ -716,9 +719,9 @@ export default function YambolyModeratorPage() {
                 }}
                 style={{
                   padding: "0.75rem 1.5rem",
-                  borderRadius: "12px",
-                  background: "rgba(255, 51, 102, 0.15)",
-                  border: "1px solid var(--yb-red)",
+                  borderRadius: "14px",
+                  background: "rgba(239, 68, 68, 0.12)",
+                  border: "1.5px solid var(--yb-red)",
                   color: "var(--yb-red)",
                   fontWeight: 800,
                   fontSize: "0.9rem",

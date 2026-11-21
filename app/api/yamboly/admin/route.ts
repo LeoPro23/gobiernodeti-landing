@@ -16,7 +16,12 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { action } = body;
+    let action = body.action;
+
+    // Support both string action payload and object payload { type: "..." }
+    if (typeof action === "string") {
+      action = { type: action };
+    }
 
     if (!action || !action.type) {
       return NextResponse.json(

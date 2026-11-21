@@ -172,10 +172,28 @@ export async function ensureYambolyTables() {
     await pool.query(`
       INSERT INTO yamboly_prizes (session_id, place, title, description, image_url)
       VALUES
-        ('fullday', 1, '1er Puesto: Super Pack Yámboly Campeón', 'Pack familiar de helados y postres Yámboly + merchandising oficial + diploma de excelencia', '/images/yamboly/premio-1.webp'),
-        ('fullday', 2, '2do Puesto: Pack Yámboly Silver', 'Pack surtido premium de helados Yámboly + merchandising', '/images/yamboly/premio-2.webp'),
-        ('fullday', 3, '3er Puesto: Pack Yámboly Bronze', 'Caja degustación de helados Yámboly', '/images/yamboly/premio-3.webp')
+        ('fullday', 1, '1er Puesto: Caja de Helados Yámboly Campeón', 'Caja de helados surtidos y Magneto Crunchy Vanilla Yámboly', '/images/sponsor/premio.webp'),
+        ('fullday', 2, '2do Puesto: Caja de Helados Yámboly Silver', 'Caja de helados surtidos y Magneto Crunchy Vanilla Yámboly', '/images/sponsor/premio.webp'),
+        ('fullday', 3, '3er Puesto: Caja de Helados Yámboly Bronze', 'Caja degustación de helados y Magneto Crunchy Vanilla Yámboly', '/images/sponsor/premio.webp')
       ON CONFLICT (session_id, place) DO NOTHING;
+    `);
+  } else {
+    // Harmonize legacy titles and include Magneto Crunchy Vanilla
+    await pool.query(`
+      UPDATE yamboly_prizes
+      SET title = CASE
+        WHEN place = 1 THEN '1er Puesto: Caja de Helados Yámboly Campeón'
+        WHEN place = 2 THEN '2do Puesto: Caja de Helados Yámboly Silver'
+        WHEN place = 3 THEN '3er Puesto: Caja de Helados Yámboly Bronze'
+        ELSE title
+      END,
+      description = CASE
+        WHEN place = 1 THEN 'Caja de helados surtidos y Magneto Crunchy Vanilla Yámboly'
+        WHEN place = 2 THEN 'Caja de helados surtidos y Magneto Crunchy Vanilla Yámboly'
+        WHEN place = 3 THEN 'Caja degustación de helados y Magneto Crunchy Vanilla Yámboly'
+        ELSE description
+      END
+      WHERE session_id = 'fullday' AND (description NOT LIKE '%Magneto Crunchy Vanilla%' OR title LIKE '%Pack%');
     `);
   }
 

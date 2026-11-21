@@ -17,7 +17,7 @@ interface RouletteWheelProps {
   size?: number;
 }
 
-// Web Audio API synthesized sound effects (Zero external files needed)
+// Web Audio API synthesized sound effects
 function playTickSound() {
   try {
     const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
@@ -27,16 +27,14 @@ function playTickSound() {
     const gain = ctx.createGain();
     osc.type = "triangle";
     osc.frequency.setValueAtTime(800, ctx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(200, ctx.currentTime + 0.04);
-    gain.gain.setValueAtTime(0.15, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(220, ctx.currentTime + 0.04);
+    gain.gain.setValueAtTime(0.18, ctx.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.04);
     osc.connect(gain);
     gain.connect(ctx.destination);
     osc.start();
     osc.stop(ctx.currentTime + 0.05);
-  } catch (e) {
-    // Audio might be blocked until user interacts
-  }
+  } catch (e) {}
 }
 
 function playWinSound() {
@@ -59,6 +57,15 @@ function playWinSound() {
     });
   } catch (e) {}
 }
+
+const YAMBOLY_WHEEL_COLORS = [
+  "#e6007e", // Magenta Yámboly
+  "#00a3e0", // Cyan Helado
+  "#ffb703", // Mango Dorado
+  "#8b5cf6", // Mora Silvestre
+  "#10b981", // Menta Refrescante
+  "#f97316", // Naranja Cítrica
+];
 
 export function RouletteWheel({
   categories,
@@ -89,11 +96,9 @@ export function RouletteWheel({
     ctx.translate(radius, radius);
     ctx.rotate(angle);
 
-    const defaultColors = ["#006ff5", "#ae1df5", "#00d2ff", "#ff007a", "#ffb703", "#00f59b"];
-
     categories.forEach((cat, i) => {
       const sliceAngle = i * arc;
-      const baseColor = cat.color || defaultColors[i % defaultColors.length];
+      const baseColor = cat.color || YAMBOLY_WHEEL_COLORS[i % YAMBOLY_WHEEL_COLORS.length];
 
       // Draw slice background
       ctx.beginPath();
@@ -101,27 +106,28 @@ export function RouletteWheel({
       ctx.arc(0, 0, radius - 14, sliceAngle, sliceAngle + arc);
       ctx.closePath();
 
+      // Radiant slice gradient for Light Mode
       const grad = ctx.createRadialGradient(0, 0, radius * 0.15, 0, 0, radius);
-      grad.addColorStop(0, baseColor);
-      grad.addColorStop(0.85, "#04142b");
-      grad.addColorStop(1, "#020914");
+      grad.addColorStop(0, "#ffffff");
+      grad.addColorStop(0.35, baseColor);
+      grad.addColorStop(1, baseColor);
       ctx.fillStyle = grad;
       ctx.fill();
 
-      // Neon segment separation
-      ctx.strokeStyle = "rgba(66, 220, 255, 0.4)";
-      ctx.lineWidth = 3;
+      // Slice white separator line
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 4;
       ctx.stroke();
 
-      // Slice outer rim lights (bulbs)
+      // Outer bulb light
       const midAngle = sliceAngle + arc / 2;
-      const bulbX = (radius - 22) * Math.cos(midAngle);
-      const bulbY = (radius - 22) * Math.sin(midAngle);
+      const bulbX = (radius - 24) * Math.cos(midAngle);
+      const bulbY = (radius - 24) * Math.sin(midAngle);
       ctx.beginPath();
       ctx.arc(bulbX, bulbY, 5, 0, 2 * Math.PI);
-      ctx.fillStyle = isSpinning ? "#ffffff" : "var(--yb-cyan)";
-      ctx.shadowColor = "#42dcff";
-      ctx.shadowBlur = 10;
+      ctx.fillStyle = isSpinning ? "#ffffff" : "#ffb703";
+      ctx.shadowColor = "#ffb703";
+      ctx.shadowBlur = 8;
       ctx.fill();
       ctx.shadowBlur = 0;
 
@@ -130,24 +136,29 @@ export function RouletteWheel({
       ctx.rotate(midAngle);
       ctx.textAlign = "right";
       ctx.fillStyle = "#ffffff";
-      ctx.font = "bold 16px system-ui, -apple-system, sans-serif";
-      ctx.shadowColor = "rgba(0, 0, 0, 0.95)";
-      ctx.shadowBlur = 10;
+      ctx.font = "900 17px system-ui, -apple-system, sans-serif";
+      ctx.shadowColor = "rgba(0, 0, 0, 0.45)";
+      ctx.shadowBlur = 6;
+      ctx.shadowOffsetX = 1;
+      ctx.shadowOffsetY = 1;
 
       const label = cat.name.length > 22 ? cat.name.slice(0, 20) + "..." : cat.name;
-      ctx.fillText(label, radius - 40, 6);
+      ctx.fillText(label, radius - 44, 6);
       ctx.restore();
     });
 
-    // Outer neon rim
+    // Outer golden & magenta rim
     ctx.beginPath();
     ctx.arc(0, 0, radius - 10, 0, 2 * Math.PI);
-    ctx.strokeStyle = "rgba(66, 220, 255, 0.8)";
+    ctx.strokeStyle = "#ffb703";
     ctx.lineWidth = 6;
-    ctx.shadowColor = "#42dcff";
-    ctx.shadowBlur = 18;
     ctx.stroke();
-    ctx.shadowBlur = 0;
+
+    ctx.beginPath();
+    ctx.arc(0, 0, radius - 14, 0, 2 * Math.PI);
+    ctx.strokeStyle = "rgba(230, 0, 126, 0.4)";
+    ctx.lineWidth = 2;
+    ctx.stroke();
 
     ctx.restore();
   };
@@ -179,23 +190,25 @@ export function RouletteWheel({
     const totalRotation = fullSpins + delta;
     const targetAngle = startAngle + totalRotation;
 
-    const duration = 5200;
+    const duration = 5200; // 5.2 seconds spin
     const startTime = performance.now();
 
     const animate = (now: number) => {
       const elapsed = now - startTime;
       const progress = Math.min(1, elapsed / duration);
 
-      // Deceleration easing
-      const ease = 1 - Math.pow(1 - progress, 3.8);
+      // Quartic ease out
+      const ease = 1 - Math.pow(1 - progress, 4);
       const angle = startAngle + totalRotation * ease;
       currentAngleRef.current = angle;
 
-      // Tick audio trigger when pointer passes into a new sector
-      const pointerNormalized = (1.5 * Math.PI - (angle % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
-      const currentSlice = Math.floor(pointerNormalized / arc);
-      if (currentSlice !== lastTickSliceRef.current) {
-        lastTickSliceRef.current = currentSlice;
+      // Audio tick calculation
+      const currentNormAngle = (angle % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI);
+      const activeSlice = Math.floor(
+        ((1.5 * Math.PI - currentNormAngle + 2 * Math.PI) % (2 * Math.PI)) / arc
+      );
+      if (activeSlice !== lastTickSliceRef.current) {
+        lastTickSliceRef.current = activeSlice;
         playTickSound();
       }
 
@@ -223,7 +236,7 @@ export function RouletteWheel({
   return (
     <div className="yb-roulette-container">
       <div className="yb-wheel-wrap" style={{ width: size, height: size }}>
-        {/* Pointer with animated neon drop glow */}
+        {/* Pointer with animated drop glow */}
         <div className="yb-wheel-pointer" />
         <canvas
           ref={canvasRef}
@@ -232,7 +245,7 @@ export function RouletteWheel({
           className="yb-wheel-canvas"
           style={{ width: size, height: size }}
         />
-        <div className="yb-wheel-center" style={{ overflow: "hidden", padding: "8px", background: "#ffffff" }}>
+        <div className="yb-wheel-center" style={{ overflow: "hidden", padding: "8px" }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src="/images/sponsor/yamboli.jpg"
@@ -246,20 +259,20 @@ export function RouletteWheel({
         <div
           style={{
             marginTop: "1.75rem",
-            padding: "1rem 2rem",
-            background: "rgba(6, 25, 52, 0.9)",
-            border: `2px solid ${selectedCategory.color || "var(--yb-cyan)"}`,
-            borderRadius: "20px",
+            padding: "1rem 2.25rem",
+            background: "rgba(255, 255, 255, 0.96)",
+            border: `2px solid ${selectedCategory.color || "var(--yb-primary)"}`,
+            borderRadius: "22px",
             textAlign: "center",
-            boxShadow: `0 0 35px ${selectedCategory.color || "var(--yb-cyan)"}66`,
+            boxShadow: `0 10px 30px rgba(230, 0, 126, 0.15)`,
             animation: "pulse-dot 2.5s infinite",
             maxWidth: "600px",
           }}
         >
-          <div style={{ fontSize: "0.85rem", color: "#94a3b8", fontWeight: 800, textTransform: "uppercase", letterSpacing: "1.5px" }}>
+          <div style={{ fontSize: "0.85rem", color: "var(--yb-primary)", fontWeight: 800, textTransform: "uppercase", letterSpacing: "1.5px" }}>
             🎯 Categoría Sorteada
           </div>
-          <div style={{ fontSize: "1.8rem", fontWeight: 900, color: "#ffffff", marginTop: "4px" }}>
+          <div style={{ fontSize: "1.85rem", fontWeight: 900, color: "var(--yb-text-title)", marginTop: "4px" }}>
             {selectedCategory.name}
           </div>
         </div>

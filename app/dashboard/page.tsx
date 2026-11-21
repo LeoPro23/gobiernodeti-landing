@@ -14,9 +14,9 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
 
   return (
     <>
-      <main className="admin-container">
+      <main className="admin-container" suppressHydrationWarning>
         <DashboardTabs />
-        <section className="admin-heading">
+        <section className="admin-heading" suppressHydrationWarning>
           <div><p className="admin-eyebrow">GESTIÓN DEL EVENTO / INSCRIPCIONES</p><h1>Los próximos protagonistas.</h1><p className="admin-muted">Todos los inscritos al XII FULLDAY, en un solo lugar.</p></div>
           <div className="admin-heading-actions">
             <Link href="/dashboard/certificados" className="admin-primary"><FileCheck2 size={16} aria-hidden="true" /> Revisar certificados</Link>

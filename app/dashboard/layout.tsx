@@ -12,10 +12,10 @@ export const metadata: Metadata = {
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   return (
-    <div className="admin-root">
-      <header className="admin-topbar">
+    <div className="admin-root" suppressHydrationWarning>
+      <header className="admin-topbar" suppressHydrationWarning>
         <Link href="/" className="admin-brand">XII <strong>FULLDAY</strong><span>PANEL DE ADMINISTRACIÓN</span></Link>
-        <div className="admin-topbar-actions">
+        <div className="admin-topbar-actions" suppressHydrationWarning>
           <YambolyLauncher />
           <span className="admin-private">Acceso privado</span>
           <LogoutButton />

@@ -73,6 +73,7 @@ export async function GET(req: NextRequest) {
 
     let currentQuestion: Record<string, unknown> | null = null;
     let answerStats: { selected_option_id: string; count: string }[] | null = null;
+    let statsMap: Record<string, number> = { A: 0, B: 0, C: 0, D: 0 };
     let answeredCount = 0;
 
     if (session.current_question_id) {
@@ -102,6 +103,9 @@ export async function GET(req: NextRequest) {
             answersParams
           );
           answerStats = statsRes.rows;
+          statsRes.rows.forEach((r: any) => {
+            statsMap[r.selected_option_id] = Number(r.count || 0);
+          });
         }
       }
     }
@@ -151,7 +155,7 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       session,
       settings: {
         readingDurationSec: session.reading_duration_sec,
@@ -165,6 +169,7 @@ export async function GET(req: NextRequest) {
       remainingPerCategory: remainingRes.rows,
       currentQuestion,
       answerStats,
+      answerStatsMap: statsMap,
       answeredCount,
       leaderboard: ranking.slice(0, 15),
       prizes,
@@ -182,6 +187,9 @@ export async function GET(req: NextRequest) {
       participantCurrentAnswer,
       serverTime: new Date().toISOString(),
     });
+
+    response.headers.set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0");
+    return response;
   } catch (error) {
     console.error("Error in /api/yamboly/state:", error);
     return NextResponse.json(

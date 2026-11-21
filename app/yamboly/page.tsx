@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { Clock, CheckCircle2, Award, Scale } from "lucide-react";
+import { Clock, CheckCircle2, Award, Scale, Gift, Check, Sparkles } from "lucide-react";
+import { ConfettiCanvas } from "./components/ConfettiCanvas";
 import "./yamboly.css";
 
 export default function YambolyParticipantPage() {
@@ -17,12 +18,26 @@ export default function YambolyParticipantPage() {
   const [timerRemaining, setTimerRemaining] = useState<number>(0);
   const [timerTotal, setTimerTotal] = useState<number>(1);
 
-  // Poll state every 1 second for snappy mobile responsiveness
+  const [token, setToken] = useState<string>("");
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("yamboly_token") || "";
+      if (saved) setToken(saved);
+    }
+  }, []);
+
+  // Poll state every 650ms for snappy real-time responsiveness
   useEffect(() => {
     let isMounted = true;
     const fetchState = async () => {
       try {
-        const res = await fetch("/api/yamboly/state");
+        const savedToken = typeof window !== "undefined" ? localStorage.getItem("yamboly_token") || "" : "";
+        const tokenQuery = savedToken ? `&token=${encodeURIComponent(savedToken)}` : "";
+        const res = await fetch(`/api/yamboly/state?t=${Date.now()}${tokenQuery}`, {
+          cache: "no-store",
+          credentials: "include",
+        });
         if (!res.ok) return;
         const json = await res.json();
         if (isMounted) {
@@ -39,7 +54,7 @@ export default function YambolyParticipantPage() {
     };
 
     fetchState();
-    const interval = setInterval(fetchState, 1000);
+    const interval = setInterval(fetchState, 650);
     return () => {
       isMounted = false;
       clearInterval(interval);
@@ -89,8 +104,15 @@ export default function YambolyParticipantPage() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Error al registrarse");
 
+      if (json.token && typeof window !== "undefined") {
+        try {
+          localStorage.setItem("yamboly_token", json.token);
+        } catch (e) {}
+      }
+
       // Refresh state immediately
-      const stateRes = await fetch("/api/yamboly/state");
+      const tokenQuery = json.token ? `?token=${encodeURIComponent(json.token)}&t=${Date.now()}` : `?t=${Date.now()}`;
+      const stateRes = await fetch(`/api/yamboly/state${tokenQuery}`, { cache: "no-store" });
       const stateJson = await stateRes.json();
       setData(stateJson);
     } catch (err: any) {
@@ -127,7 +149,9 @@ export default function YambolyParticipantPage() {
       if (!res.ok) throw new Error(json.error || "Error al enviar respuesta");
 
       // Update state
-      const stateRes = await fetch("/api/yamboly/state");
+      const storedToken = typeof window !== "undefined" ? localStorage.getItem("yamboly_token") : null;
+      const tokenQuery = storedToken ? `?token=${encodeURIComponent(storedToken)}&t=${Date.now()}` : `?t=${Date.now()}`;
+      const stateRes = await fetch(`/api/yamboly/state${tokenQuery}`, { cache: "no-store" });
       const stateJson = await stateRes.json();
       setData(stateJson);
     } catch (err: any) {
@@ -141,19 +165,24 @@ export default function YambolyParticipantPage() {
   const session = data?.session;
   const currentQuestion = data?.currentQuestion;
   const participantAnswer = data?.participantCurrentAnswer;
+  const prizes = data?.prizes;
   const pointsPerCorrect = data?.settings?.pointsPerCorrect ?? 4;
   const prizePlaces = Number(data?.prizePlaces ?? 3);
   const inTiebreak = (session?.tiebreak_round || 0) > 0;
   const isContender = Boolean(participant?.is_tiebreak_contender);
   const tiebreakContenders: { id: number; full_name: string }[] = data?.tiebreak?.contenders ?? [];
-  // Durante el desempate, quien no está empatado solo observa.
   const spectatingTiebreak =
     inTiebreak && !isContender && ["QUESTION_READING", "QUESTION_ANSWERING", "QUESTION_REVEAL"].includes(session?.status);
 
+  const isWinner = session?.status === "PODIUM" && participant?.rank && participant.rank <= prizePlaces;
+  const prizeForMe = prizes?.find((p: any) => p.place === participant?.rank);
+
   return (
-    <div className="yb-root">
-      <div className="yb-mobile-container">
-        
+    <div className="yb-root" suppressHydrationWarning>
+      {/* Mobile Confetti celebration for winners */}
+      <ConfettiCanvas active={isWinner} />
+
+      <div className="yb-mobile-container" suppressHydrationWarning>
         {/* Top Header Mobile */}
         <header
           style={{
@@ -162,7 +191,7 @@ export default function YambolyParticipantPage() {
             justifyContent: "space-between",
             padding: "0.85rem 0",
             marginBottom: "1rem",
-            borderBottom: "1px solid rgba(255,255,255,0.1)",
+            borderBottom: "1.5px solid rgba(230, 0, 126, 0.15)",
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
@@ -170,10 +199,10 @@ export default function YambolyParticipantPage() {
             <img
               src="/images/sponsor/yamboli.jpg"
               alt="Logo Yámboly"
-              style={{ height: "32px", width: "auto", borderRadius: "6px", objectFit: "contain", background: "#fff", padding: "2px" }}
+              style={{ height: "34px", width: "auto", borderRadius: "8px", objectFit: "contain", background: "#fff", padding: "2px", border: "1px solid rgba(230,0,126,0.2)" }}
             />
-            <span style={{ fontSize: "0.85rem", color: "var(--yb-cyan)", fontWeight: 800 }}>
-              QUIZ
+            <span style={{ fontSize: "0.95rem", color: "var(--yb-primary)", fontWeight: 900 }}>
+              QUIZ YÁMBOLY
             </span>
           </div>
 
@@ -183,15 +212,15 @@ export default function YambolyParticipantPage() {
                 display: "flex",
                 alignItems: "center",
                 gap: "8px",
-                background: "rgba(0, 111, 245, 0.25)",
+                background: "linear-gradient(135deg, rgba(230, 0, 126, 0.1) 0%, rgba(0, 163, 224, 0.1) 100%)",
                 padding: "6px 14px",
                 borderRadius: "999px",
-                border: "1px solid var(--yb-border)",
+                border: "1.5px solid rgba(230, 0, 126, 0.25)",
               }}
             >
-              <Award size={16} color="var(--yb-gold)" />
-              <span style={{ fontSize: "1.05rem", fontWeight: 900, color: "#fff" }}>
-                {participant.score} <span style={{ fontSize: "0.75rem", color: "var(--yb-cyan)" }}>pts</span>
+              <Award size={18} color="var(--yb-gold)" />
+              <span style={{ fontSize: "1.1rem", fontWeight: 900, color: "var(--yb-text-title)" }}>
+                {participant.score} <span style={{ fontSize: "0.8rem", color: "var(--yb-primary)" }}>pts</span>
               </span>
             </div>
           )}
@@ -201,14 +230,11 @@ export default function YambolyParticipantPage() {
         {!participant ? (
           <div className="yb-hud-panel" style={{ padding: "2.25rem 1.5rem", marginTop: "auto", marginBottom: "auto" }}>
             <div style={{ textAlign: "center", marginBottom: "1.5rem" }}>
-              <span className="yb-badge-live" style={{ marginBottom: "0.5rem" }}>
-                INSCRIPCIÓN RÁPIDA
-              </span>
-              <h1 style={{ fontSize: "1.85rem", fontWeight: 900, marginTop: "0.25rem" }}>
+              <h1 style={{ fontSize: "1.85rem", fontWeight: 900, marginTop: "0.25rem", color: "var(--yb-text-title)" }}>
                 Únete a la Dinámica
               </h1>
-              <p style={{ fontSize: "0.95rem", color: "#94a3b8", marginTop: "0.4rem" }}>
-                Compite en vivo desde tu celular por los premios oficiales de Yámboly.
+              <p style={{ fontSize: "0.95rem", color: "var(--yb-text-muted)", marginTop: "0.4rem" }}>
+                Compite en vivo desde tu celular por los premios oficiales de Helados Yámboly.
               </p>
             </div>
 
@@ -216,10 +242,10 @@ export default function YambolyParticipantPage() {
               <div
                 style={{
                   padding: "0.85rem",
-                  background: "rgba(255, 51, 102, 0.15)",
+                  background: "rgba(239, 68, 68, 0.12)",
                   border: "1px solid var(--yb-red)",
                   borderRadius: "14px",
-                  color: "#ff8da8",
+                  color: "#dc2626",
                   fontSize: "0.9rem",
                   marginBottom: "1rem",
                 }}
@@ -230,7 +256,7 @@ export default function YambolyParticipantPage() {
 
             <form onSubmit={handleRegister} style={{ display: "flex", flexDirection: "column", gap: "1.1rem" }}>
               <div>
-                <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 700, marginBottom: "6px", color: "#cbd5e1" }}>
+                <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 700, marginBottom: "6px", color: "var(--yb-text-body)" }}>
                   Nombres completos *
                 </label>
                 <input
@@ -243,18 +269,60 @@ export default function YambolyParticipantPage() {
                     width: "100%",
                     padding: "0.95rem 1rem",
                     borderRadius: "14px",
-                    background: "rgba(255,255,255,0.06)",
-                    border: "1px solid rgba(255,255,255,0.18)",
-                    color: "#fff",
+                    background: "#ffffff",
+                    border: "1.5px solid rgba(148, 163, 184, 0.35)",
+                    color: "var(--yb-text-title)",
                     fontSize: "1rem",
                     outline: "none",
                   }}
                 />
               </div>
 
-              <label>Correo electrónico *<input aria-label="Correo electrónico" type="email" required maxLength={200} value={email} onChange={(e) => setEmail(e.target.value)} className="yb-mobile-btn" /></label>
-              <label>Número de teléfono *<input aria-label="Número de teléfono" type="tel" required maxLength={50} value={phone} onChange={(e) => setPhone(e.target.value)} className="yb-mobile-btn" /></label>
-              <p>Usaremos estos datos para identificar a los participantes y coordinar la premiación. Tu nombre se mostrará en el ranking. Conserva este navegador para mantener tu participación.</p>
+              <div>
+                <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 700, marginBottom: "6px", color: "var(--yb-text-body)" }}>
+                  Correo electrónico *
+                </label>
+                <input
+                  type="email"
+                  required
+                  placeholder="tu@correo.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  style={{
+                    width: "100%",
+                    padding: "0.95rem 1rem",
+                    borderRadius: "14px",
+                    background: "#ffffff",
+                    border: "1.5px solid rgba(148, 163, 184, 0.35)",
+                    color: "var(--yb-text-title)",
+                    fontSize: "1rem",
+                    outline: "none",
+                  }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 700, marginBottom: "6px", color: "var(--yb-text-body)" }}>
+                  Teléfono / WhatsApp *
+                </label>
+                <input
+                  type="tel"
+                  required
+                  placeholder="987654321"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  style={{
+                    width: "100%",
+                    padding: "0.95rem 1rem",
+                    borderRadius: "14px",
+                    background: "#ffffff",
+                    border: "1.5px solid rgba(148, 163, 184, 0.35)",
+                    color: "var(--yb-text-title)",
+                    fontSize: "1rem",
+                    outline: "none",
+                  }}
+                />
+              </div>
 
               <button
                 type="submit"
@@ -263,203 +331,203 @@ export default function YambolyParticipantPage() {
                   marginTop: "0.5rem",
                   padding: "1.1rem",
                   borderRadius: "16px",
-                  background: "linear-gradient(135deg, var(--yb-blue) 0%, var(--yb-purple) 100%)",
-                  color: "#fff",
-                  fontWeight: 900,
-                  fontSize: "1.1rem",
                   border: "none",
+                  background: "linear-gradient(135deg, var(--yb-primary) 0%, var(--yb-cyan) 100%)",
+                  color: "#ffffff",
+                  fontSize: "1.15rem",
+                  fontWeight: 900,
                   cursor: "pointer",
-                  boxShadow: "0 0 30px rgba(0, 111, 245, 0.5)",
+                  boxShadow: "0 8px 24px rgba(230, 0, 126, 0.3)",
                 }}
               >
-                {isSubmittingRegister ? "Registrando..." : "Entrar a la Dinámica"}
+                {isSubmittingRegister ? "Ingresando..." : "¡Entrar a la Dinámica! 🚀"}
               </button>
             </form>
           </div>
         ) : (
-          /* STEP 2: PARTICIPANT GAME VIEWS */
+          /* STEP 2: ACTIVE GAME INTERFACE FOR REGISTERED PLAYER */
           <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
-            
-            {/* LOBBY / WAITING */}
-            {session?.status === "WAITING_REGISTRATION" && (
-              <div className="yb-hud-panel" style={{ padding: "2.75rem 1.5rem", textAlign: "center", margin: "auto 0" }}>
-                <div style={{ fontSize: "3.5rem", marginBottom: "0.5rem" }}>🍦</div>
-                <h2 style={{ fontSize: "1.75rem", fontWeight: 900 }}>¡Estás dentro, {participant.full_name}!</h2>
-                <p style={{ color: "#94a3b8", fontSize: "1rem", marginTop: "0.5rem", lineHeight: 1.4 }}>
-                  Mira la pantalla gigante del auditorio. En breve se girará la Ruleta Yámboly para la Ronda 1.
+            {/* LOBBY OR ROULETTE STAGE */}
+            {["WAITING_REGISTRATION", "ROULETTE"].includes(session?.status) && (
+              <div className="yb-hud-panel" style={{ padding: "2.5rem 1.5rem", textAlign: "center", margin: "auto 0" }}>
+                <div style={{ fontSize: "3.5rem", marginBottom: "0.75rem" }}>
+                  {session.status === "ROULETTE" ? "🎡" : "⏳"}
+                </div>
+                <span className="yb-badge-live" style={{ marginBottom: "0.5rem" }}>
+                  {session.status === "ROULETTE" ? "SORTEO EN VIVO" : "SALA DE ESPERA"}
+                </span>
+                <h2 style={{ fontSize: "1.85rem", fontWeight: 900, marginTop: "0.5rem", color: "var(--yb-text-title)" }}>
+                  {session.status === "ROULETTE"
+                    ? "¡Mira la Ruleta en la Pantalla!"
+                    : "¡Todo Listo para Empezar!"}
+                </h2>
+                <p style={{ color: "var(--yb-text-muted)", fontSize: "1rem", marginTop: "0.5rem", lineHeight: 1.4 }}>
+                  {session.status === "ROULETTE"
+                    ? "El moderador está sorteando la categoría de la ronda. En breve se abrirá tu pantalla para responder."
+                    : `Bienvenido(a) ${participant.full_name}. Mantén tu celular activo: el juego comenzará en breve.`}
                 </p>
+
                 <div
                   style={{
-                    marginTop: "1.75rem",
-                    padding: "1rem 1.25rem",
-                    background: "rgba(0, 245, 155, 0.12)",
-                    border: "1px solid var(--yb-green)",
-                    borderRadius: "14px",
-                    color: "var(--yb-green)",
-                    fontWeight: 800,
-                    fontSize: "0.95rem",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: "8px",
+                    marginTop: "2rem",
+                    padding: "1rem",
+                    background: "#ffffff",
+                    borderRadius: "16px",
+                    border: "1.5px solid rgba(148, 163, 184, 0.25)",
+                    boxShadow: "0 2px 8px rgba(0,0,0,0.03)",
                   }}
                 >
-                  <CheckCircle2 size={18} />
-                  Inscripción confirmada
+                  <div style={{ fontSize: "0.85rem", color: "var(--yb-text-muted)" }}>Tu Código de Jugador:</div>
+                  <div style={{ fontSize: "1.35rem", fontWeight: 900, color: "var(--yb-primary)", letterSpacing: "1px" }}>
+                    #{participant.id.toString().padStart(4, "0")}
+                  </div>
                 </div>
               </div>
             )}
 
-            {/* TIEBREAK: ANNOUNCEMENT OR SPECTATOR VIEW */}
-            {(session?.status === "TIEBREAK" || spectatingTiebreak) && (
-              <div
-                className="yb-hud-panel"
-                style={{
-                  padding: "2.5rem 1.5rem",
-                  textAlign: "center",
-                  margin: "auto 0",
-                  border: `1.5px solid ${isContender ? "var(--yb-gold)" : "var(--yb-border)"}`,
-                }}
-              >
-                <div style={{ display: "flex", justifyContent: "center", marginBottom: "0.75rem" }}>
-                  <Scale size={48} color="var(--yb-gold)" />
-                </div>
-                <h2 style={{ fontSize: "1.6rem", fontWeight: 900, color: isContender ? "var(--yb-gold)" : "#fff" }}>
-                  {isContender ? "¡Estás en el desempate!" : "Desempate en curso"}
+            {/* SPECTATING TIEBREAK NOTICE */}
+            {spectatingTiebreak && (
+              <div className="yb-hud-panel" style={{ padding: "2.5rem 1.5rem", textAlign: "center", margin: "auto 0" }}>
+                <div style={{ fontSize: "3rem", marginBottom: "0.5rem" }}>⚖️</div>
+                <span className="yb-badge-live" style={{ marginBottom: "0.5rem" }}>DESEMPATE EN CURSO</span>
+                <h2 style={{ fontSize: "1.8rem", fontWeight: 900, color: "var(--yb-gold)" }}>
+                  Ronda de Desempate
                 </h2>
-                <p style={{ color: "#cbd5e1", fontSize: "1rem", marginTop: "0.6rem", lineHeight: 1.45 }}>
-                  {isContender
-                    ? "Empataste en un puesto premiado. Responde la pregunta adicional: gana quien acierte y, entre quienes aciertan, el más rápido. No suma puntos."
-                    : `Solo responden los participantes empatados: ${tiebreakContenders.map((p) => p.full_name).join(", ")}. Mira la pantalla del auditorio.`}
+                <p style={{ color: "var(--yb-text-body)", fontSize: "1rem", margin: "0.75rem 0" }}>
+                  Esta pregunta es exclusiva para los participantes empatados en puestos premiados:
                 </p>
-                {!isContender && (
-                  <div style={{ marginTop: "1.25rem", fontSize: "1rem", color: "var(--yb-cyan)", fontWeight: 800 }}>
-                    Tu puntaje final: {participant.score} puntos
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* ROULETTE VIEW ON PHONE */}
-            {session?.status === "ROULETTE" && (
-              <div className="yb-hud-panel" style={{ padding: "3rem 1.5rem", textAlign: "center", margin: "auto 0" }}>
-                <div style={{ fontSize: "3.5rem", marginBottom: "0.5rem", animation: "spin 2s linear infinite" }}>
-                  🎡
-                </div>
-                <h2 style={{ fontSize: "1.6rem", fontWeight: 900 }}>¡Girando la Ruleta!</h2>
-                <p style={{ color: "#94a3b8", fontSize: "1rem", marginTop: "0.5rem" }}>
-                  Observa la pantalla principal para descubrir el tema de la Ronda {session.current_round}.
-                </p>
-              </div>
-            )}
-
-            {/* QUESTION READING WITH VISIBLE COUNTDOWN (LOCKED) */}
-            {session?.status === "QUESTION_READING" && currentQuestion && !spectatingTiebreak && (
-              <div className="yb-hud-panel" style={{ padding: "1.75rem 1.25rem", margin: "auto 0" }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1rem" }}>
-                  <span
-                    style={{
-                      padding: "6px 12px",
-                      borderRadius: "10px",
-                      background: "rgba(174, 29, 245, 0.25)",
-                      border: "1px solid var(--yb-purple)",
-                      color: "#d8b4fe",
-                      fontSize: "0.8rem",
-                      fontWeight: 800,
-                    }}
-                  >
-                    {inTiebreak ? "⚖️ DESEMPATE · LECTURA" : "🔒 LECTURA (Móviles en espera)"}
-                  </span>
-                  
-                  {/* Countdown Badge on Player Mobile */}
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "6px",
-                      background: "rgba(174, 29, 245, 0.2)",
-                      border: "1px solid var(--yb-purple)",
-                      padding: "4px 12px",
-                      borderRadius: "999px",
-                      fontSize: "1rem",
-                      fontWeight: 900,
-                      color: "#d8b4fe",
-                    }}
-                  >
-                    <Clock size={16} />
-                    {timerRemaining}s
-                  </div>
-                </div>
-
-                <div className="yb-timer-bar-wrap" style={{ height: "10px", marginBottom: "1.25rem" }}>
-                  <div
-                    className="yb-timer-bar-fill"
-                    style={{
-                      width: `${(timerRemaining / (timerTotal || 1)) * 100}%`,
-                      backgroundColor: "var(--yb-purple)",
-                    }}
-                  />
-                </div>
-
-                <h3 style={{ fontSize: "1.25rem", fontWeight: 800, marginBottom: "1.25rem", lineHeight: 1.35 }}>
-                  {currentQuestion.text}
-                </h3>
-
-                <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-                  {currentQuestion.options?.map((opt: any) => (
+                <div style={{ display: "flex", flexDirection: "column", gap: "6px", margin: "1rem 0" }}>
+                  {tiebreakContenders.map((c) => (
                     <div
-                      key={opt.id}
+                      key={c.id}
                       style={{
-                        padding: "1rem",
-                        borderRadius: "16px",
-                        background: "rgba(255,255,255,0.04)",
-                        border: "1px solid rgba(255,255,255,0.1)",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "12px",
-                        color: "#94a3b8",
+                        padding: "8px 12px",
+                        background: "#ffffff",
+                        borderRadius: "10px",
+                        border: "1px solid rgba(255, 183, 3, 0.5)",
+                        fontWeight: 800,
                       }}
                     >
-                      <strong style={{ color: "#fff", fontSize: "1.1rem" }}>{opt.id}.</strong> {opt.text}
+                      {c.full_name}
                     </div>
                   ))}
                 </div>
+                <p style={{ color: "var(--yb-text-muted)", fontSize: "0.88rem" }}>
+                  Tu puntaje acumulado ({participant.score} pts) no cambia. Observa la pantalla del auditorio para ver la
+                  resolución.
+                </p>
+              </div>
+            )}
 
-                <div style={{ textAlign: "center", marginTop: "1.25rem", fontSize: "0.85rem", color: "#94a3b8" }}>
-                  ¡Analiza bien las alternativas! Los botones se desbloquearán en <strong>{timerRemaining}s</strong>.
+            {/* QUESTION READING PHASE - UNIFIED CARD */}
+            {session?.status === "QUESTION_READING" && currentQuestion && !spectatingTiebreak && (
+              <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                <div
+                  className="yb-hud-panel"
+                  style={{
+                    padding: "2.25rem 1.5rem",
+                    border: "2px solid rgba(255, 183, 3, 0.4)",
+                    background: "linear-gradient(135deg, #ffffff 0%, #fffdf5 100%)",
+                    textAlign: "center",
+                    position: "relative",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      marginBottom: "1.25rem",
+                      flexWrap: "wrap",
+                      gap: "8px",
+                    }}
+                  >
+                    <div
+                      style={{
+                        padding: "5px 14px",
+                        borderRadius: "999px",
+                        background: `${currentQuestion.category_color}18`,
+                        color: currentQuestion.category_color,
+                        fontSize: "0.85rem",
+                        fontWeight: 900,
+                        textTransform: "uppercase",
+                      }}
+                    >
+                      {currentQuestion.category_name}
+                    </div>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        background: "rgba(255, 183, 3, 0.18)",
+                        border: "1.5px solid var(--yb-gold)",
+                        padding: "5px 14px",
+                        borderRadius: "999px",
+                        fontSize: "1.1rem",
+                        fontWeight: 900,
+                        color: "#b45309",
+                      }}
+                    >
+                      <Clock size={16} />
+                      {timerRemaining > 0 ? `${timerRemaining}s` : "¡Votación lista!"}
+                    </div>
+                  </div>
+
+                  <div className="yb-timer-bar-wrap" style={{ height: "8px", margin: "0 0 1.5rem 0" }}>
+                    <div
+                      className="yb-timer-bar-fill"
+                      style={{ width: `${(timerRemaining / (timerTotal || 1)) * 100}%`, backgroundColor: "var(--yb-gold)" }}
+                    />
+                  </div>
+
+                  <h3
+                    style={{
+                      fontSize: "1.35rem",
+                      fontWeight: 800,
+                      lineHeight: 1.4,
+                      color: "var(--yb-text-title)",
+                      margin: "0 0 1.25rem 0",
+                    }}
+                  >
+                    {currentQuestion.text}
+                  </h3>
+
+                  <div style={{ fontSize: "0.85rem", color: "var(--yb-text-muted)", fontWeight: 700 }}>
+                    💡 Analiza la pregunta con atención; las opciones se habilitarán en breve.
+                  </div>
                 </div>
               </div>
             )}
 
-            {/* QUESTION ANSWERING WITH ENERGETIC COUNTDOWN & TACTILE BUTTONS */}
+            {/* QUESTION ANSWERING PHASE */}
             {session?.status === "QUESTION_ANSWERING" && currentQuestion && !spectatingTiebreak && (
               <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", gap: "1rem" }}>
-                
-                {/* Header with Live Mobile Timer */}
-                <div className="yb-hud-panel" style={{ padding: "1.1rem", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <div>
-                    <span style={{ fontSize: "0.75rem", color: inTiebreak ? "var(--yb-gold)" : "var(--yb-cyan)", fontWeight: 900, textTransform: "uppercase" }}>
-                      {inTiebreak ? "¡DESEMPATE!" : "¡VOTACIÓN ABIERTA!"}
-                    </span>
-                    <div style={{ fontSize: "1rem", fontWeight: 800, color: "#fff" }}>
-                      {inTiebreak ? `Pregunta adicional #${session.tiebreak_round}` : `Ronda ${session.current_round}`}
-                    </div>
-                  </div>
+                {/* Timer Header */}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <span
+                    style={{
+                      fontSize: "0.85rem",
+                      color: "var(--yb-primary)",
+                      fontWeight: 800,
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    {inTiebreak ? "⚖️ PREGUNTA DE DESEMPATE" : `Ronda ${session.current_round} · Marca tu respuesta`}
+                  </span>
 
-                  {/* Big Glowing Countdown */}
                   <div
                     style={{
                       display: "flex",
                       alignItems: "center",
                       gap: "6px",
-                      background: timerRemaining <= 5 ? "rgba(255, 51, 102, 0.25)" : "rgba(0, 111, 245, 0.25)",
+                      background: timerRemaining <= 5 ? "rgba(239, 68, 68, 0.15)" : "rgba(0, 163, 224, 0.12)",
                       border: `1.5px solid ${timerRemaining <= 5 ? "var(--yb-red)" : "var(--yb-cyan)"}`,
                       padding: "6px 16px",
                       borderRadius: "999px",
                       fontSize: "1.3rem",
                       fontWeight: 900,
                       color: timerRemaining <= 5 ? "var(--yb-red)" : "var(--yb-cyan)",
-                      boxShadow: `0 0 15px ${timerRemaining <= 5 ? "var(--yb-red)" : "var(--yb-cyan)"}44`,
                     }}
                   >
                     <Clock size={18} />
@@ -479,7 +547,7 @@ export default function YambolyParticipantPage() {
                 </div>
 
                 <div className="yb-hud-panel" style={{ padding: "1.25rem", textAlign: "center" }}>
-                  <h3 style={{ fontSize: "1.15rem", fontWeight: 800, lineHeight: 1.35 }}>
+                  <h3 style={{ fontSize: "1.15rem", fontWeight: 800, lineHeight: 1.35, color: "var(--yb-text-title)" }}>
                     {currentQuestion.text}
                   </h3>
                 </div>
@@ -487,10 +555,10 @@ export default function YambolyParticipantPage() {
                 {data.hasAnsweredCurrentQuestion ? (
                   <div className="yb-hud-panel" style={{ padding: "2.25rem 1.5rem", textAlign: "center" }}>
                     <div style={{ fontSize: "2.8rem", marginBottom: "0.5rem" }}>⚡</div>
-                    <h3 style={{ fontSize: "1.4rem", fontWeight: 900, color: "var(--yb-cyan)" }}>
+                    <h3 style={{ fontSize: "1.4rem", fontWeight: 900, color: "var(--yb-primary)" }}>
                       ¡Respuesta {selectedOption || participantAnswer?.selected_option_id} Enviada!
                     </h3>
-                    <p style={{ color: "#94a3b8", fontSize: "0.9rem", marginTop: "0.5rem" }}>
+                    <p style={{ color: "var(--yb-text-muted)", fontSize: "0.9rem", marginTop: "0.5rem" }}>
                       Tu voto está bloqueado. En <strong>{timerRemaining}s</strong> se revelará si acertaste en verde o rojo.
                     </p>
                   </div>
@@ -520,7 +588,7 @@ export default function YambolyParticipantPage() {
                         >
                           {opt.id}
                         </span>
-                        <span style={{ flex: 1, textAlign: "left" }}>{opt.text}</span>
+                        <span style={{ flex: 1, textAlign: "left", color: "var(--yb-text-title)" }}>{opt.text}</span>
                       </button>
                     ))}
                   </div>
@@ -528,10 +596,9 @@ export default function YambolyParticipantPage() {
               </div>
             )}
 
-            {/* QUESTION REVEAL (SHOWS EXACT GREEN / RED CARDS ON PHONE) */}
+            {/* QUESTION REVEAL */}
             {session?.status === "QUESTION_REVEAL" && currentQuestion && !spectatingTiebreak && (
               <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", gap: "1rem" }}>
-                
                 {/* Result Hero Banner */}
                 <div
                   className="yb-hud-panel"
@@ -540,9 +607,9 @@ export default function YambolyParticipantPage() {
                     textAlign: "center",
                     border: `2px solid ${participantAnswer?.is_correct ? "var(--yb-green)" : "var(--yb-red)"}`,
                     background: participantAnswer?.is_correct
-                      ? "rgba(0, 245, 155, 0.12)"
-                      : "rgba(255, 51, 102, 0.12)",
-                    boxShadow: `0 0 30px ${participantAnswer?.is_correct ? "var(--yb-green)" : "var(--yb-red)"}33`,
+                      ? "rgba(16, 185, 129, 0.12)"
+                      : "rgba(239, 68, 68, 0.12)",
+                    boxShadow: `0 10px 30px ${participantAnswer?.is_correct ? "rgba(16, 185, 129, 0.2)" : "rgba(239, 68, 68, 0.15)"}`,
                   }}
                 >
                   <div style={{ fontSize: "3rem", marginBottom: "0.4rem" }}>
@@ -561,7 +628,7 @@ export default function YambolyParticipantPage() {
                         : `¡Acertaste! +${pointsPerCorrect} PUNTOS`
                       : "¡No acertaste esta vez!"}
                   </h2>
-                  <p style={{ color: "#fff", fontSize: "0.95rem", marginTop: "0.4rem", fontWeight: 700 }}>
+                  <p style={{ color: "var(--yb-text-title)", fontSize: "0.95rem", marginTop: "0.4rem", fontWeight: 700 }}>
                     {participantAnswer?.is_correct
                       ? "¡Excelente velocidad y precisión!"
                       : `La respuesta correcta era la opción ${currentQuestion.correct_option_id}`}
@@ -583,7 +650,7 @@ export default function YambolyParticipantPage() {
                         key={opt.id}
                         className={btnClass}
                         style={{
-                          opacity: !isCorrect && !isMyPick ? 0.4 : 1,
+                          opacity: !isCorrect && !isMyPick ? 0.5 : 1,
                         }}
                       >
                         <span
@@ -591,24 +658,24 @@ export default function YambolyParticipantPage() {
                           style={{
                             width: "36px",
                             height: "36px",
-                            borderRadius: "8px",
+                            borderRadius: "10px",
                             fontSize: "1.1rem",
                             backgroundColor: isCorrect ? "var(--yb-green)" : isMyPick ? "var(--yb-red)" : undefined,
-                            color: isCorrect ? "#000" : undefined,
+                            color: "#ffffff",
                           }}
                         >
                           {opt.id}
                         </span>
-                        
+
                         <div style={{ flex: 1 }}>
-                          <div>{opt.text}</div>
+                          <div style={{ color: "var(--yb-text-title)" }}>{opt.text}</div>
                           {isCorrect && (
-                            <div style={{ fontSize: "0.75rem", color: "var(--yb-green)", fontWeight: 800 }}>
+                            <div style={{ fontSize: "0.78rem", color: "var(--yb-green)", fontWeight: 800 }}>
                               ✓ RESPUESTA CORRECTA
                             </div>
                           )}
                           {isMyPick && !isCorrect && (
-                            <div style={{ fontSize: "0.75rem", color: "var(--yb-red)", fontWeight: 800 }}>
+                            <div style={{ fontSize: "0.78rem", color: "var(--yb-red)", fontWeight: 800 }}>
                               ✗ TU ELECCIÓN
                             </div>
                           )}
@@ -622,31 +689,27 @@ export default function YambolyParticipantPage() {
                 <div
                   className="yb-hud-panel"
                   style={{
-                    padding: "0.9rem",
+                    padding: "0.9rem 1.25rem",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "space-between",
                   }}
                 >
-                  <span style={{ fontSize: "0.85rem", color: "#94a3b8" }}>Puntaje Acumulado:</span>
-                  <span style={{ fontSize: "1.3rem", fontWeight: 900, color: "var(--yb-cyan)" }}>
+                  <span style={{ fontSize: "0.9rem", color: "var(--yb-text-muted)" }}>Puntaje Acumulado:</span>
+                  <span style={{ fontSize: "1.35rem", fontWeight: 900, color: "var(--yb-primary)" }}>
                     {participant.score} puntos
                   </span>
                 </div>
               </div>
             )}
 
-            {/* ROUND RANKING OR FINAL PODIUM */}
-            {(session?.status === "ROUND_RANKING" || session?.status === "PODIUM") && (
+            {/* ROUND RANKING (DURING GAME) */}
+            {session?.status === "ROUND_RANKING" && (
               <div className="yb-hud-panel" style={{ padding: "2.5rem 1.5rem", textAlign: "center", margin: "auto 0" }}>
                 <span className="yb-badge-live" style={{ marginBottom: "0.5rem" }}>
-                  {session.status === "PODIUM"
-                    ? "FINAL DEL JUEGO"
-                    : inTiebreak
-                    ? `TRAS EL DESEMPATE #${session.tiebreak_round}`
-                    : `FIN RONDA ${session.current_round}`}
+                  {inTiebreak ? `TRAS EL DESEMPATE #${session.tiebreak_round}` : `FIN RONDA ${session.current_round}`}
                 </span>
-                <h2 style={{ fontSize: "1.8rem", fontWeight: 900, marginTop: "0.5rem" }}>
+                <h2 style={{ fontSize: "1.85rem", fontWeight: 900, marginTop: "0.5rem", color: "var(--yb-text-title)" }}>
                   Tu Desempeño
                 </h2>
 
@@ -654,32 +717,158 @@ export default function YambolyParticipantPage() {
                   style={{
                     margin: "1.5rem 0",
                     padding: "1.5rem",
-                    background: "rgba(255,255,255,0.04)",
-                    borderRadius: "20px",
-                    border: "1.5px solid var(--yb-border)",
+                    background: "#ffffff",
+                    borderRadius: "22px",
+                    border: "2px solid rgba(230, 0, 126, 0.2)",
+                    boxShadow: "0 8px 25px rgba(230, 0, 126, 0.08)",
                   }}
                 >
-                  <div style={{ fontSize: "0.9rem", color: "#94a3b8" }}>Puesto en la Tabla General</div>
-                  <div style={{ fontSize: "3rem", fontWeight: 900, color: "var(--yb-gold)", lineHeight: 1.1, marginTop: "6px" }}>
+                  <div style={{ fontSize: "0.9rem", color: "var(--yb-text-muted)" }}>Puesto en la Tabla General</div>
+                  <div style={{ fontSize: "3.5rem", fontWeight: 900, color: "var(--yb-primary)", lineHeight: 1.1, marginTop: "4px" }}>
                     #{participant.rank ?? "-"}
                   </div>
                   <div style={{ fontSize: "1.3rem", fontWeight: 800, color: "var(--yb-cyan)", marginTop: "6px" }}>
                     {participant.score} puntos acumulados
                   </div>
-                  <div style={{ fontSize: "0.9rem", color: "#cbd5e1", marginTop: "8px" }}>
+                  <div style={{ fontSize: "0.9rem", color: "var(--yb-text-body)", marginTop: "8px" }}>
                     {participant.correct_count} de {session.current_round} preguntas acertadas
                   </div>
                 </div>
 
-                <p style={{ color: "#94a3b8", fontSize: "0.95rem" }}>
+                <p style={{ color: "var(--yb-text-muted)", fontSize: "0.95rem" }}>
                   {participant.tied && session.current_round >= session.total_rounds && participant.rank <= prizePlaces
                     ? "⚖️ Estás en un empate técnico por un puesto premiado. Atento al celular: puede haber una pregunta de desempate."
-                    : session.status === "PODIUM" && participant.rank && participant.rank <= prizePlaces
-                    ? "🎉 ¡Estás en el Podio de Premios Yámboly! Acércate a la mesa de premiación."
-                    : session.status !== "PODIUM" && participant.rank && participant.rank <= prizePlaces
-                    ? "🔥 ¡Vas en zona de premios! Sigue así."
-                    : "Mira la pantalla gigante para ver la clasificación final completa."}
+                    : participant.rank && participant.rank <= prizePlaces
+                    ? "🔥 ¡Vas en zona de premios! Mantén la concentración para las siguientes rondas."
+                    : "Mira la pantalla del auditorio para ver la tabla completa."}
                 </p>
+              </div>
+            )}
+
+            {/* STAGE 7: FINAL PODIUM ON MOBILE (SPECTACULAR WINNER CELEBRATION OR RANK REPORT) */}
+            {session?.status === "PODIUM" && (
+              <div style={{ margin: "auto 0", display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+                {isWinner ? (
+                  /* ================= WINNER VIEW ================= */
+                  <div
+                    className="yb-hud-panel"
+                    style={{
+                      padding: "2rem 1.5rem",
+                      textAlign: "center",
+                      border: "2.5px solid var(--yb-gold)",
+                      background: "linear-gradient(135deg, #ffffff 0%, #fffbf0 50%, #fff0f6 100%)",
+                      boxShadow: "0 14px 40px rgba(245, 158, 11, 0.35)",
+                    }}
+                  >
+                    <div style={{ fontSize: "3.8rem", lineHeight: 1, marginBottom: "0.5rem" }}>
+                      {participant.rank === 1 ? "🥇" : participant.rank === 2 ? "🥈" : "🥉"}
+                    </div>
+
+                    <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", background: "var(--yb-primary)", color: "#fff", padding: "4px 14px", borderRadius: "999px", fontSize: "0.8rem", fontWeight: 900, textTransform: "uppercase", marginBottom: "0.75rem" }}>
+                      <Sparkles size={14} /> ¡GANADOR OFICIAL DEL QUIZ! <Sparkles size={14} />
+                    </div>
+
+                    <h1 style={{ fontSize: "1.85rem", fontWeight: 900, color: "var(--yb-text-title)", margin: "0 0 0.5rem" }}>
+                      ¡Felicitaciones, {participant.full_name}!
+                    </h1>
+
+                    {/* Giant Rank Display */}
+                    <div
+                      style={{
+                        padding: "1.25rem",
+                        background: "#ffffff",
+                        borderRadius: "20px",
+                        border: "2px solid var(--yb-gold)",
+                        margin: "1.25rem 0",
+                        boxShadow: "0 8px 24px rgba(255, 183, 3, 0.2)",
+                      }}
+                    >
+                      <div style={{ fontSize: "0.88rem", color: "var(--yb-text-muted)", textTransform: "uppercase", fontWeight: 800 }}>
+                        Tu Puesto Oficial
+                      </div>
+                      <div style={{ fontSize: "4.5rem", fontWeight: 900, color: "var(--yb-gold)", lineHeight: 1, margin: "6px 0" }}>
+                        #{participant.rank}
+                      </div>
+                      <div style={{ fontSize: "1.35rem", fontWeight: 900, color: "var(--yb-primary)" }}>
+                        {participant.score} puntos acumulados
+                      </div>
+                      <div style={{ fontSize: "0.9rem", color: "var(--yb-text-body)", marginTop: "4px" }}>
+                        {participant.correct_count} aciertos de {session.total_rounds} preguntas
+                      </div>
+                    </div>
+
+                    {/* Prize Spotlight on Phone */}
+                    <div
+                      style={{
+                        padding: "1.25rem",
+                        background: "#ffffff",
+                        borderRadius: "18px",
+                        border: "1.5px solid rgba(230, 0, 126, 0.25)",
+                        marginBottom: "1.25rem",
+                        textAlign: "left",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "1rem",
+                      }}
+                    >
+                      <div style={{ width: "95px", height: "80px", borderRadius: "14px", overflow: "hidden", flexShrink: 0, border: "1px solid rgba(230,0,126,0.2)" }}>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src="/images/sponsor/premio.webp" alt="Premio Ganado" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                      </div>
+                      <div>
+                        <div style={{ fontSize: "0.78rem", fontWeight: 800, color: "var(--yb-primary)", textTransform: "uppercase" }}>
+                          Tu Premio Asignado:
+                        </div>
+                        <div style={{ fontSize: "1.1rem", fontWeight: 900, color: "var(--yb-text-title)" }}>
+                          {prizeForMe?.title ?? "Caja de Helados Yámboly"}
+                        </div>
+                        <div style={{ fontSize: "0.82rem", color: "var(--yb-text-muted)", marginTop: "2px" }}>
+                          {prizeForMe?.description ?? "Caja con delicioso surtido de helados Yámboly y Magneto Crunchy Vanilla"}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  /* ================= NON-WINNER PARTICIPANT VIEW ================= */
+                  <div className="yb-hud-panel" style={{ padding: "2.5rem 1.5rem", textAlign: "center" }}>
+                    <div style={{ fontSize: "3rem", marginBottom: "0.5rem" }}>👏</div>
+                    <span className="yb-badge-live" style={{ marginBottom: "0.5rem" }}>
+                      GRAN FINAL
+                    </span>
+                    <h2 style={{ fontSize: "1.85rem", fontWeight: 900, marginTop: "0.5rem", color: "var(--yb-text-title)" }}>
+                      ¡Gracias por Participar!
+                    </h2>
+
+                    <div
+                      style={{
+                        margin: "1.5rem 0",
+                        padding: "1.5rem",
+                        background: "#ffffff",
+                        borderRadius: "20px",
+                        border: "2px solid rgba(148, 163, 184, 0.25)",
+                        boxShadow: "0 6px 20px rgba(0, 0, 0, 0.04)",
+                      }}
+                    >
+                      <div style={{ fontSize: "0.88rem", color: "var(--yb-text-muted)", textTransform: "uppercase", fontWeight: 800 }}>
+                        Tu Puesto Final
+                      </div>
+                      <div style={{ fontSize: "4.2rem", fontWeight: 900, color: "var(--yb-cyan)", lineHeight: 1, margin: "6px 0" }}>
+                        #{participant.rank ?? "-"}
+                      </div>
+                      <div style={{ fontSize: "1.3rem", fontWeight: 900, color: "var(--yb-text-title)" }}>
+                        {participant.score} puntos
+                      </div>
+                      <div style={{ fontSize: "0.9rem", color: "var(--yb-text-muted)", marginTop: "4px" }}>
+                        {participant.correct_count} de {session.total_rounds} preguntas acertadas
+                      </div>
+                    </div>
+
+                    <p style={{ color: "var(--yb-text-body)", fontSize: "0.95rem", lineHeight: 1.4 }}>
+                      ¡Hiciste un excelente papel en el Full Day ISACA UNT 2026! Te invitamos a seguir disfrutando de las
+                      conferencias y de los helados de nuestro patrocinador oficial <strong>Helados Yámboly</strong>. 🍦
+                    </p>
+                  </div>
+                )}
               </div>
             )}
           </div>

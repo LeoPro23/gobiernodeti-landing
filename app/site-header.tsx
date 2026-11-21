@@ -52,11 +52,14 @@ export function SiteHeader({ page, onFaq }: { page: "home" | "speakers" | "regis
         href="/yamboly"
         className="button"
         style={{
-          background: "linear-gradient(135deg, rgba(255, 0, 122, 0.2) 0%, rgba(174, 29, 245, 0.2) 100%)",
-          border: "1px solid rgba(255, 0, 122, 0.5)",
+          background: "linear-gradient(135deg, #e6007e 0%, #00a3e0 100%)",
           color: "#fff",
-          height: "34px",
-          padding: "0 13px",
+          height: "36px",
+          padding: "0 15px",
+          borderRadius: "10px",
+          fontWeight: 800,
+          border: "none",
+          boxShadow: "0 4px 14px rgba(230, 0, 126, 0.35)",
         }}
       >
         🎡 QUIZ YÁMBOLY
