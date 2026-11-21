@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { Clock, CheckCircle2, Award, Scale, Gift, Check, Sparkles } from "lucide-react";
 import { ConfettiCanvas } from "./components/ConfettiCanvas";
 import "./yamboly.css";
+import { HowToPlay } from "./how-to-play";
 
 const fieldLabelStyle: React.CSSProperties = { display: "block", fontSize: "0.85rem", fontWeight: 700, marginBottom: "6px", color: "var(--yb-text-body)" };
 const fieldInputStyle: React.CSSProperties = {
@@ -236,6 +237,11 @@ export default function YambolyParticipantPage() {
   const participantAnswer = data?.participantCurrentAnswer;
   const prizes = data?.prizes;
   const pointsPerCorrect = data?.settings?.pointsPerCorrect ?? 4;
+  const howToSettings = {
+    readingSec: data?.settings?.readingDurationSec ?? 8,
+    answeringSec: data?.settings?.answeringDurationSec ?? 20,
+    points: pointsPerCorrect,
+  };
   const prizePlaces = Number(data?.prizePlaces ?? 3);
   const inTiebreak = (session?.tiebreak_round || 0) > 0;
   const isContender = Boolean(participant?.is_tiebreak_contender);
@@ -297,7 +303,8 @@ export default function YambolyParticipantPage() {
 
         {/* STEP 1: REGISTRATION FORM */}
         {!participant ? (
-          <div className="yb-hud-panel" style={{ padding: "2.25rem 1.5rem", marginTop: "auto", marginBottom: "auto" }}>
+          <>
+          <div className="yb-hud-panel" style={{ padding: "2.25rem 1.5rem" }}>
             <div style={{ textAlign: "center", marginBottom: "1.5rem" }}>
               <h1 style={{ fontSize: "1.85rem", fontWeight: 900, marginTop: "0.25rem", color: "var(--yb-text-title)" }}>
                 Únete a la Dinámica
@@ -393,6 +400,8 @@ export default function YambolyParticipantPage() {
               </form>
             )}
           </div>
+          <HowToPlay settings={howToSettings} />
+          </>
         ) : (
           /* STEP 2: ACTIVE GAME INTERFACE FOR REGISTERED PLAYER */
           <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
@@ -433,6 +442,7 @@ export default function YambolyParticipantPage() {
                 </div>
               </div>
             )}
+            {session?.status === "WAITING_REGISTRATION" && <HowToPlay settings={howToSettings} registered />}
 
             {/* SPECTATING TIEBREAK NOTICE */}
             {spectatingTiebreak && (
