@@ -16,6 +16,7 @@ export const DEFAULT_SETTINGS = {
   answeringDurationSec: 20,
   pointsPerCorrect: 4,
   tieThresholdMs: 1000,
+  maxTiebreakQuestions: 3,
   difficultySequence: ["FACIL", "INTERMEDIA", "INTERMEDIA", "DIFICIL", "DIFICIL"] as Difficulty[],
   allowLateEntry: false,
 };
@@ -165,6 +166,17 @@ export function relevantTieGroups(tieGroups: TieGroup[], prizePlaces: number) {
   return tieGroups.filter((group) => group.fromPosition <= prizePlaces);
 }
 
+/** El sorteo externo solo incluye al grupo que sigue empatado en el primer puesto. */
+export function tiebreakOutcome(tieGroups: TieGroup[], prizePlaces: number, round: number, maxQuestions: number) {
+  const relevantTies = relevantTieGroups(tieGroups, prizePlaces);
+  const limitReached = round >= maxQuestions;
+  return {
+    relevantTies,
+    limitReached,
+    drawGroup: limitReached && prizePlaces > 0 ? relevantTies.find((group) => group.fromPosition === 1) ?? null : null,
+  };
+}
+
 // ----------------- Parámetros de partida -----------------
 
 export type GameSettings = typeof DEFAULT_SETTINGS;
@@ -188,6 +200,7 @@ export function parseGameSettings(input: {
   answeringDurationSec: unknown;
   pointsPerCorrect: unknown;
   tieThresholdMs: unknown;
+  maxTiebreakQuestions?: unknown;
   difficultySequence: unknown[];
   allowLateEntry: unknown;
 }): Result<GameSettings> {
@@ -199,6 +212,8 @@ export function parseGameSettings(input: {
   if (!points.ok) return points;
   const threshold = integerInRange(input.tieThresholdMs, "El umbral de empate técnico", 0, 10000);
   if (!threshold.ok) return threshold;
+  const maxTiebreak = integerInRange(input.maxTiebreakQuestions ?? DEFAULT_SETTINGS.maxTiebreakQuestions, "La cantidad de preguntas de desempate", 1, 20);
+  if (!maxTiebreak.ok) return maxTiebreak;
 
   const sequence = input.difficultySequence
     .map((value) => (typeof value === "string" ? value.trim() : ""))
@@ -214,6 +229,7 @@ export function parseGameSettings(input: {
       answeringDurationSec: answering.value,
       pointsPerCorrect: points.value,
       tieThresholdMs: threshold.value,
+      maxTiebreakQuestions: maxTiebreak.value,
       difficultySequence: sequence,
       allowLateEntry: input.allowLateEntry === true || input.allowLateEntry === "on" || input.allowLateEntry === "true",
     },
@@ -293,6 +309,28 @@ function truthy(value: unknown) {
   if (value === true) return true;
   if (typeof value !== "string") return false;
   return ["si", "sí", "s", "true", "1", "x", "on", "yes"].includes(value.trim().toLowerCase());
+}
+
+// ----------------- Inscripción de participantes -----------------
+
+/** DNI peruano o carné de extranjería: solo dígitos, como en la inscripción del Fullday. */
+export function normalizeDni(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const dni = value.trim();
+  return /^\d{8,12}$/.test(dni) ? dni : null;
+}
+
+export function cleanParticipantName(value: unknown): Result<string> {
+  const name = typeof value === "string" ? value.replace(/\s+/g, " ").trim() : "";
+  if (name.length < 3) return { ok: false, error: "Ingresa nombres y apellidos." };
+  if (name.length > 200) return { ok: false, error: "El nombre no puede superar 200 caracteres." };
+  return { ok: true, value: name };
+}
+
+export function cleanEmail(value: unknown): Result<string> {
+  const email = typeof value === "string" ? value.trim().toLowerCase() : "";
+  if (email.length > 200 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { ok: false, error: "Ingresa un correo válido." };
+  return { ok: true, value: email };
 }
 
 // ----------------- Importación CSV -----------------

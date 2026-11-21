@@ -238,6 +238,49 @@
 .qa-row-editing { background: #eef5ff; }
 .qa-template { display: flex; align-items: end; }
 .qa-json { margin: 6px 0 0; max-width: 520px; max-height: 260px; overflow: auto; padding: 10px; border-radius: 6px; background: #f2f6fb; font-size: 11px; white-space: pre-wrap; word-break: break-word; }
+.qa-page .admin-search input { padding-left: 37px !important; }
+
+/* ---------- Registro de participantes: herramientas de la tabla ---------- */
+.reg-admin-tools { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 0 24px 16px; }
+.admin-columns > summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 8px; font-weight: 800; color: var(--admin-ink); }
+.admin-columns > summary::-webkit-details-marker { display: none; }
+.admin-columns { position: relative; flex: 0 0 auto; margin-left: auto; }
+.admin-columns > summary { min-height: 46px; padding: 0 14px; border: 1px solid var(--admin-line); border-radius: 8px; background: #fff; font-size: 13px; }
+.admin-columns > summary span { color: var(--admin-muted); font-weight: 500; }
+.admin-columns[open] > summary { border-color: var(--admin-blue); color: var(--admin-blue); }
+.admin-columns-menu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 20; width: min(340px, calc(100vw - 32px)); padding: 14px; display: grid; gap: 12px; background: #fff; border: 1px solid var(--admin-line); border-radius: 10px; box-shadow: 0 12px 32px rgba(15, 35, 70, .14); }
+.admin-columns-presets { display: flex; flex-wrap: wrap; gap: 6px; }
+.admin-columns fieldset { border: 0; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; }
+.admin-columns fieldset label { display: flex !important; align-items: center; gap: 8px !important; font-size: 13px !important; font-weight: 500 !important; cursor: pointer; }
+.admin-columns fieldset input { width: 16px; height: 16px; accent-color: var(--admin-blue); }
+.reg-register { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
+.reg-register-notice { display: inline-flex; align-items: center; gap: 6px; color: #1d6b4b; font-size: 13px; font-weight: 600; }
+.reg-dialog { margin: auto; overflow: auto; overscroll-behavior: contain; width: min(760px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); padding: 0; border: 0; border-radius: 12px; background: #fff; color: var(--admin-ink); box-shadow: 0 24px 64px rgba(10, 30, 60, .28); }
+.reg-dialog::backdrop { background: rgba(10, 25, 50, .55); }
+.reg-dialog-body { padding: 20px 22px 6px; }
+.reg-dialog-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.reg-dialog-head h2 { display: flex; align-items: center; gap: 8px; font-size: 18px; font-weight: 800; }
+.reg-dialog-close { display: grid; place-items: center; width: 36px; height: 36px; border: 0; border-radius: 8px; background: transparent; color: var(--admin-muted); cursor: pointer; }
+.reg-dialog-close:hover { background: #eef3f9; color: var(--admin-ink); }
+.reg-dialog-hint { margin-top: 4px !important; color: var(--admin-muted); font-size: 13px; }
+.reg-dialog .reg-dialog-form { padding: 16px 0 18px; }
+.reg-dialog .qa-check { flex-wrap: nowrap !important; align-items: flex-start !important; }
+.reg-dialog .qa-check input { flex-shrink: 0; margin-top: 1px; }
+.reg-table-bar { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; padding: 4px 24px 16px; }
+.reg-live-search { flex: 1 1 360px; display: grid; gap: 7px; margin: 0; }
+.reg-live-search > label { font-size: 12px; font-weight: 700; }
+.reg-live-search input { padding-right: 40px; }
+.reg-live-search input::-webkit-search-cancel-button { display: none; }
+.reg-live-clear { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); display: grid; place-items: center; width: 32px; height: 32px; border: 0; border-radius: 6px; background: transparent; color: var(--admin-muted); cursor: pointer; }
+.reg-live-clear svg { position: static !important; }
+.reg-live-clear:hover { background: #eef3f9; color: var(--admin-ink); }
+.reg-live-spin { animation: reg-spin .8s linear infinite; }
+@keyframes reg-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .reg-live-spin { animation: none; } }
+@media (max-width: 760px) { .reg-admin-tools, .reg-table-bar { padding-inline: 16px; } }
+.qa-attendance { display: flex !important; flex-direction: column; align-items: center; gap: 6px !important; }
+.qa-attendance input { width: 22px; height: 22px; accent-color: #1d6b4b; cursor: pointer; }
+.qa-attendance input:disabled { cursor: progress; }
 .qa-page code { font-size: 12px; background: #eef3f9; padding: 1px 5px; border-radius: 4px; }
 @media (min-width: 720px) {
   .qa-grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }

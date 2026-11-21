@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { RouletteWheel } from "../components/RouletteWheel";
 import { ConfettiCanvas } from "../components/ConfettiCanvas";
@@ -59,6 +59,10 @@ export default function YambolyScreenPage() {
   const [timerRemaining, setTimerRemaining] = useState<number>(0);
   const [timerTotal, setTimerTotal] = useState<number>(1);
   const [isSpinning, setIsSpinning] = useState<boolean>(false);
+  const clockOffset = useRef(0);
+  // Evita que cada actualización reinicie la animación con un nuevo arreglo equivalente.
+  const categoryKey = JSON.stringify(data?.categories ?? []);
+  const stableCategories = useMemo(() => JSON.parse(categoryKey), [categoryKey]);
 
   // Poll state every 1.2 seconds for real-time synchronization
   useEffect(() => {
@@ -73,6 +77,7 @@ export default function YambolyScreenPage() {
         if (!res.ok) throw new Error("Error al consultar estado");
         const json = await res.json();
         if (isMounted) {
+          clockOffset.current = Date.parse(json.serverTime) - Date.now();
           setData(json);
           setError(null);
 
@@ -114,11 +119,13 @@ export default function YambolyScreenPage() {
 
     if (start && duration) {
       setTimerTotal(duration / 1000);
-      const timerInt = setInterval(() => {
-        const elapsed = (session.paused_at ? new Date(session.paused_at).getTime() : Date.now()) - start;
+      const tick = () => {
+        const elapsed = (session.paused_at ? new Date(session.paused_at).getTime() : Date.now() + clockOffset.current) - start;
         const left = Math.max(0, Math.ceil((duration - elapsed) / 1000));
         setTimerRemaining(left);
-      }, 250);
+      };
+      tick();
+      const timerInt = setInterval(tick, 250);
       return () => clearInterval(timerInt);
     } else {
       setTimerRemaining(0);
@@ -140,7 +147,6 @@ export default function YambolyScreenPage() {
 
   const {
     session,
-    categories,
     currentQuestion,
     answerStats,
     leaderboard,
@@ -149,6 +155,7 @@ export default function YambolyScreenPage() {
     settings,
     tiebreak,
   } = data;
+  const categories = stableCategories;
   const status = session.status;
   const currentRound = session.current_round || 0;
   const totalRounds = session.total_rounds || 5;
@@ -345,7 +352,7 @@ export default function YambolyScreenPage() {
                   <li>⏱️ <strong>Tiempo de lectura</strong> en pantalla para analizar la pregunta antes de responder.</li>
                   <li>📱 <strong>Tiempo cronometrado</strong> para marcar tu respuesta en el celular.</li>
                   <li>🏆 <strong>Puntaje por acierto</strong>. En caso de empate, define la dificultad y la velocidad de respuesta.</li>
-                  <li>⚖️ Si persiste un empate en puestos premiados, se juega una <strong>pregunta de desempate</strong>.</li>
+                  <li>⚖️ Si persiste un empate en puestos premiados, se juegan <strong>preguntas de desempate</strong>. Si persiste en el primer puesto, se define por sorteo.</li>
                 </ul>
               </div>
             </div>
@@ -535,7 +542,7 @@ export default function YambolyScreenPage() {
         )}
 
         {/* STAGE 3, 4, 5: QUESTION DISPLAY (READING, ANSWERING, REVEAL) */}
-        {["QUESTION_READING", "QUESTION_ANSWERING", "QUESTION_REVEAL"].includes(status) && currentQuestion && (
+        {["QUESTION_READY", "QUESTION_READING", "QUESTION_ANSWERING", "QUESTION_REVEAL"].includes(status) && currentQuestion && (
           <div className="yb-hud-panel yb-question-box">
             {/* Header info */}
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "1rem" }}>
@@ -557,7 +564,7 @@ export default function YambolyScreenPage() {
                   DIFICULTAD: {currentQuestion.difficulty}
                 </span>
 
-                {status !== "QUESTION_REVEAL" && (
+                {status !== "QUESTION_REVEAL" && status !== "QUESTION_READY" && (
                   <div
                     style={{
                       fontSize: "2.4rem",
@@ -568,7 +575,7 @@ export default function YambolyScreenPage() {
                       fontVariantNumeric: "tabular-nums",
                     }}
                   >
-                    {timerRemaining}s
+                    {session.paused_at ? "PAUSA · " : ""}{timerRemaining}s
                   </div>
                 )}
               </div>
@@ -576,16 +583,20 @@ export default function YambolyScreenPage() {
 
             {/* Reading vs Answering Badge Indicator */}
             <div style={{ margin: "1rem 0" }}>
-              {status === "QUESTION_READING" && (
+              {(status === "QUESTION_READY" || status === "QUESTION_READING") && (
                 <div style={{ display: "flex", alignItems: "center", gap: "10px", color: "var(--yb-gold)", fontWeight: 800, fontSize: "1.1rem" }}>
                   <Clock size={22} />
-                  <span>TIEMPO DE LECTURA (Móviles bloqueados para pensar)</span>
+                  <span>
+                    {session.paused_at ? "⏸ Partida pausada" : status === "QUESTION_READY" ? "🔒 Pregunta visible · esperando inicio de lectura" : `TIEMPO DE LECTURA (${readingSec}s)`}
+                  </span>
                 </div>
               )}
               {status === "QUESTION_ANSWERING" && (
                 <div style={{ display: "flex", alignItems: "center", gap: "10px", color: "var(--yb-green)", fontWeight: 800, fontSize: "1.1rem" }}>
                   <Flame size={22} />
-                  <span>¡VOTACIÓN ABIERTA! Marca tu respuesta en el celular</span>
+                  <span>
+                    {session.paused_at ? "⏸ Votación pausada" : inTiebreak ? "¡DESEMPATE EN CURSO! Marca tu respuesta en el celular" : "¡VOTACIÓN ABIERTA! Marca tu respuesta en el celular"}
+                  </span>
                 </div>
               )}
               {status === "QUESTION_REVEAL" && (
@@ -600,7 +611,7 @@ export default function YambolyScreenPage() {
             <h1 className="yb-question-text">{currentQuestion.text}</h1>
 
             {/* Progress Timer Bar */}
-            {status !== "QUESTION_REVEAL" && (
+            {status !== "QUESTION_REVEAL" && status !== "QUESTION_READY" && (
               <div className="yb-timer-bar-wrap">
                 <div
                   className="yb-timer-bar-fill"
@@ -630,7 +641,7 @@ export default function YambolyScreenPage() {
               <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                 <Users size={18} color="var(--yb-primary)" />
                 <span>
-                  <strong>{answeredCount}</strong> de <strong>{participantsCount}</strong> participantes han respondido
+                  <strong>{answeredCount}</strong> {inTiebreak ? `de ${tiebreak?.contenders?.length || 0} ` : `de ${participantsCount} `}participantes han respondido
                 </span>
               </div>
               <div>
@@ -720,6 +731,13 @@ export default function YambolyScreenPage() {
         {/* STAGE 6: ROUND RANKING / LEADERBOARD */}
         {status === "ROUND_RANKING" && (
           <div className="yb-hud-panel" style={{ padding: "3rem" }}>
+            {tiebreak?.drawPending && (
+              <section style={{ marginBottom: "2rem", padding: "1.5rem", border: "1px solid var(--yb-gold)", borderRadius: "16px" }}>
+                <h2 style={{ color: "var(--yb-gold)", fontSize: "1.6rem", fontWeight: 900 }}>Empate por el primer puesto · sorteo pendiente</h2>
+                <p style={{ marginTop: "0.5rem", color: "#cbd5e1" }}>Se alcanzó el límite de preguntas. Las siguientes personas participarán en el sorteo externo:</p>
+                <ul style={{ marginTop: "1rem", paddingLeft: "1.5rem" }}>{tiebreak.drawParticipants.map((p: any) => <li key={p.id}>{p.full_name}</li>)}</ul>
+              </section>
+            )}
             <div style={{ textAlign: "center", marginBottom: "2.5rem" }}>
               <span className="yb-badge-live" style={{ marginBottom: "0.75rem" }}>
                 {inTiebreak ? `CLASIFICACIÓN TRAS EL DESEMPATE #${session.tiebreak_round}` : `CLASIFICACIÓN TRAS RONDA ${currentRound}`}

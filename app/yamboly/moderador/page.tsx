@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, useRef } from "react";
 import Link from "next/link";
+import { remainingTimeMs } from "@/lib/yamboly-timer";
 import { 
   Play, 
   Pause,
@@ -19,11 +20,13 @@ import {
   Scale
 } from "lucide-react";
 import "../yamboly.css";
+import { ParticipantsPanel } from "./participants-panel";
 
 function buildPhases(readingSec: number, answeringSec: number) {
   return [
     { id: "WAITING_REGISTRATION", label: "Lobby & QR", icon: Users, desc: "Inscripción abierta", action: "OPEN_REGISTRATION" },
     { id: "ROULETTE", label: "Ruleta", icon: RotateCw, desc: "Sorteo de categoría", action: "SPIN_ROULETTE" },
+    { id: "QUESTION_READY", label: "Pregunta", icon: Clock, desc: "Lectura pendiente", action: "SHOW_QUESTION" },
     { id: "QUESTION_READING", label: `Lectura (${readingSec}s)`, icon: Clock, desc: "Móviles bloqueados", action: "START_READING" },
     { id: "QUESTION_ANSWERING", label: `Votación (${answeringSec}s)`, icon: Play, desc: "Votación abierta", action: "START_ANSWERING" },
     { id: "QUESTION_REVEAL", label: "Revelación", icon: CheckCircle2, desc: "Respuesta correcta", action: "REVEAL_ANSWER" },
@@ -37,15 +40,16 @@ export default function YambolyModeratorPage() {
   const [data, setData] = useState<any>(null);
   const [isActionLoading, setIsActionLoading] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [autoSequence, setAutoSequence] = useState(true); // Default TRUE for fully automated flow
   const [showAdvanced, setShowAdvanced] = useState(false);
-  const autoTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const [now, setNow] = useState(0);
+  const clockOffsetRef = useRef(0);
 
   const fetchState = async () => {
     try {
       const res = await fetch(`/api/yamboly/state?t=${Date.now()}`, { cache: "no-store" });
       if (res.ok) {
         const json = await res.json();
+        clockOffsetRef.current = Date.parse(json.serverTime) - Date.now();
         setData(json);
       }
     } catch (e) {
@@ -81,57 +85,12 @@ export default function YambolyModeratorPage() {
     }
   };
 
-  // Automated sequence transition engine
   useEffect(() => {
-    if (!autoSequence || !data?.session) return;
-    const session = data.session;
-    const status = session.status;
-    const readingSec = data.settings?.readingDurationSec ?? 8;
-    const answeringSec = data.settings?.answeringDurationSec ?? 20;
-
-    if (autoTimerRef.current) {
-      clearTimeout(autoTimerRef.current);
-      autoTimerRef.current = null;
-    }
-
-    if (session.paused_at) return;
-
-    if (status === "ROULETTE") {
-      autoTimerRef.current = setTimeout(() => {
-        triggerAction("START_READING");
-      }, 5400);
-    } else if (status === "QUESTION_READING" && session.reading_start_time) {
-      const start = new Date(session.reading_start_time).getTime();
-      const duration = readingSec * 1000;
-      const elapsed = Date.now() - start;
-      const remaining = Math.max(0, duration - elapsed);
-
-      autoTimerRef.current = setTimeout(() => {
-        triggerAction("START_ANSWERING");
-      }, remaining + 200);
-    } else if (status === "QUESTION_ANSWERING" && session.answering_start_time) {
-      const start = new Date(session.answering_start_time).getTime();
-      const duration = answeringSec * 1000;
-      const elapsed = Date.now() - start;
-      const remaining = Math.max(0, duration - elapsed);
-
-      autoTimerRef.current = setTimeout(() => {
-        triggerAction("REVEAL_ANSWER");
-      }, remaining + 300);
-    }
-
-    return () => {
-      if (autoTimerRef.current) clearTimeout(autoTimerRef.current);
-    };
-  }, [
-    autoSequence,
-    data?.session?.status,
-    data?.session?.reading_start_time,
-    data?.session?.answering_start_time,
-    data?.session?.paused_at,
-    data?.settings?.readingDurationSec,
-    data?.settings?.answeringDurationSec,
-  ]);
+    const tick = () => setNow(Date.now() + clockOffsetRef.current);
+    tick();
+    const interval = setInterval(tick, 250);
+    return () => clearInterval(interval);
+  }, []);
 
   if (!data) {
     return (
@@ -162,6 +121,12 @@ export default function YambolyModeratorPage() {
   const expectedAnswers = inTiebreak ? tiebreak?.contenders?.length || 0 : participantsCount;
   const answeredCount = Number(data.answeredCount || 0);
   const responseRate = expectedAnswers > 0 ? Math.round((answeredCount / expectedAnswers) * 100) : 0;
+  const remaining = status === "QUESTION_READING"
+    ? remainingTimeMs(session.reading_start_time, readingSec, now, session.paused_at)
+    : status === "QUESTION_ANSWERING"
+      ? remainingTimeMs(session.answering_start_time, answeringSec, now, session.paused_at)
+      : null;
+  const timerRunning = remaining !== null && remaining > 0;
 
   const phaseId = status === "TIEBREAK" || (inTiebreak && status !== "ROUND_RANKING" && status !== "PODIUM") ? "TIEBREAK" : status;
   const currentPhaseIndex = PHASES.findIndex((p) => p.id === phaseId);
@@ -177,28 +142,35 @@ export default function YambolyModeratorPage() {
   if (status === "WAITING_REGISTRATION") {
     nextAction = {
       title: "Cerrar Inscripción & Girar Ruleta 🎡",
-      subtitle: `Inicia la secuencia automática de la Ronda ${currentRound + 1}`,
+      subtitle: `Inicia la Ronda ${currentRound + 1}`,
       action: "SPIN_ROULETTE",
       color: "linear-gradient(135deg, var(--yb-primary) 0%, #c00067 100%)",
     };
   } else if (status === "ROULETTE") {
     nextAction = {
-      title: autoSequence ? "Sorteando... (Avanza solo a Lectura) ⏳" : `Lanzar Pregunta (${readingSec}s Lectura) 📖`,
-      subtitle: autoSequence ? "El temporizador automático pasará a lectura en breve" : "Muestra la pregunta en pantalla",
+      title: "Mostrar pregunta 📖",
+      subtitle: "La ruleta permanecerá visible hasta que muestres la pregunta.",
+      action: "SHOW_QUESTION",
+      color: "linear-gradient(135deg, #7928ca 0%, #006ff5 100%)",
+    };
+  } else if (status === "QUESTION_READY") {
+    nextAction = {
+      title: `Iniciar lectura (${readingSec}s)`,
+      subtitle: "La pregunta está visible; las respuestas aún están bloqueadas.",
       action: "START_READING",
       color: "linear-gradient(135deg, #8b5cf6 0%, #0077e6 100%)",
     };
   } else if (status === "QUESTION_READING") {
     nextAction = {
-      title: autoSequence ? "Lectura en curso... (Abrirá votación solo) ⏳" : `Habilitar Votación Ahora (${answeringSec}s) ⚡`,
-      subtitle: autoSequence ? "Al llegar a 0s se desbloquearán los celulares" : "Desbloquea los botones en móviles",
+      title: `Iniciar votación (${answeringSec}s) ⚡`,
+      subtitle: timerRunning ? `Lectura en curso: ${Math.ceil(remaining! / 1000)}s restantes.` : "Lectura terminada. La votación espera tu indicación.",
       action: "START_ANSWERING",
       color: "linear-gradient(135deg, #10b981 0%, #00a3e0 100%)",
     };
   } else if (status === "QUESTION_ANSWERING") {
     nextAction = {
-      title: autoSequence ? `Votando... (${answeredCount} de ${expectedAnswers} votos) ⚡` : "Cerrar Votación y Revelar ✓",
-      subtitle: autoSequence ? `Se revelará solo al terminar los ${answeringSec} segundos` : `${answeredCount} de ${expectedAnswers} votos recibidos (${responseRate}%)`,
+      title: "Revelar respuesta ✓",
+      subtitle: timerRunning ? `Votación en curso: ${Math.ceil(remaining! / 1000)}s · ${answeredCount} de ${expectedAnswers} respuestas.` : `Votación cerrada: ${answeredCount} de ${expectedAnswers} respuestas (${responseRate}%).`,
       action: "REVEAL_ANSWER",
       color: "linear-gradient(135deg, #0077e6 0%, #00a3e0 100%)",
     };
@@ -216,6 +188,13 @@ export default function YambolyModeratorPage() {
         subtitle: `Quedan ${totalRounds - currentRound} rondas por jugar`,
         action: "SPIN_ROULETTE",
         color: "linear-gradient(135deg, var(--yb-primary) 0%, #8b5cf6 100%)",
+      };
+    } else if (tiebreak?.required && tiebreak?.limitReached) {
+      nextAction = {
+        title: tiebreak?.drawPending ? "Empate pendiente de sorteo externo" : "Límite de desempates alcanzado",
+        subtitle: tiebreak?.drawPending ? "Descarga la lista para realizar el sorteo del primer puesto." : "Hay empates pendientes en otros puestos premiados.",
+        action: "SHOW_PODIUM",
+        color: "linear-gradient(135deg, #ffb703 0%, #ff007a 100%)",
       };
     } else if (tiebreak?.required) {
       nextAction = {
@@ -345,20 +324,8 @@ export default function YambolyModeratorPage() {
               Línea de Tiempo del Juego
             </span>
 
-            {/* Auto Sequence Toggle and Pause Switch */}
+            {/* Pause Switch */}
             <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
-              <label style={{ display: "inline-flex", alignItems: "center", gap: "8px", cursor: "pointer", fontSize: "0.85rem", color: "var(--yb-text-body)" }}>
-                <input
-                  type="checkbox"
-                  checked={autoSequence}
-                  onChange={(e) => setAutoSequence(e.target.checked)}
-                  style={{ width: "16px", height: "16px", accentColor: "var(--yb-primary)" }}
-                />
-                <span style={{ fontWeight: autoSequence ? 800 : 500, color: autoSequence ? "var(--yb-green)" : "var(--yb-text-muted)" }}>
-                  ⚡ Secuencia 100% Automática (Ruleta → {readingSec}s Lectura → {answeringSec}s Voto → Revelación)
-                </span>
-              </label>
-
               {status !== "WAITING_REGISTRATION" && status !== "PODIUM" && (
                 <button
                   onClick={() => triggerAction(isPaused ? "RESUME" : "PAUSE")}
@@ -392,11 +359,6 @@ export default function YambolyModeratorPage() {
               return (
                 <div
                   key={phase.id}
-                  onClick={() => {
-                    if (confirm(`¿Saltar manualmente a "${phase.label}"?`)) {
-                      triggerAction(phase.action);
-                    }
-                  }}
                   style={{
                     padding: "0.75rem",
                     borderRadius: "16px",
@@ -408,7 +370,6 @@ export default function YambolyModeratorPage() {
                     border: `1.5px solid ${
                       isCurrent ? "var(--yb-primary)" : isPast ? "rgba(16, 185, 129, 0.4)" : "rgba(148, 163, 184, 0.25)"
                     }`,
-                    cursor: "pointer",
                     transition: "all 0.2s ease",
                     boxShadow: isCurrent ? "0 4px 14px rgba(230, 0, 126, 0.15)" : "none",
                   }}
@@ -445,13 +406,11 @@ export default function YambolyModeratorPage() {
           }}
         >
           <div style={{ fontSize: "0.85rem", color: "var(--yb-primary)", fontWeight: 800, textTransform: "uppercase", letterSpacing: "2px", marginBottom: "0.75rem" }}>
-            {autoSequence && (status === "ROULETTE" || status === "QUESTION_READING" || status === "QUESTION_ANSWERING")
-              ? "⚡ Secuencia Automática en Marcha (Sin presionar nada)"
-              : "Control de Avance"}
+            Control de avance
           </div>
 
           <button
-            disabled={isActionLoading || isPaused || status === "PODIUM"}
+            disabled={isActionLoading || isPaused || status === "PODIUM" || ((status === "QUESTION_READING" || status === "QUESTION_ANSWERING") && (remaining === null || timerRunning)) || (status === "ROUND_RANKING" && tiebreak?.required && tiebreak?.limitReached)}
             onClick={() => triggerAction(nextAction.action)}
             style={{
               padding: "1.3rem 2.8rem",
@@ -512,7 +471,23 @@ export default function YambolyModeratorPage() {
               <Scale size={20} color="var(--yb-gold)" />
               <h2 style={{ fontSize: "1.1rem", fontWeight: 900, color: "var(--yb-text-title)" }}>Estado de la premiación</h2>
             </div>
-            {phaseId === "TIEBREAK" ? (
+            {tiebreak?.drawPending ? (
+              <div>
+                <p style={{ color: "var(--yb-text-body)" }}>
+                  Tras {session.tiebreak_round} preguntas persiste el empate por el primer puesto. El premio se definirá mediante un sorteo externo; aún no hay ganador.
+                </p>
+                <ul style={{ margin: "1rem 0", paddingLeft: "1.5rem", color: "var(--yb-text-title)", fontWeight: 700 }}>
+                  {tiebreak.drawParticipants.map((p: any) => <li key={p.id}>{p.full_name}</li>)}
+                </ul>
+                <a href="/api/yamboly/admin/empate.xlsx" className="yb-mobile-btn" style={{ display: "inline-block", textDecoration: "none" }}>
+                  Descargar participantes para sorteo (.xlsx)
+                </a>
+              </div>
+            ) : tiebreak?.required && tiebreak?.limitReached && status === "ROUND_RANKING" ? (
+              <p style={{ color: "var(--yb-text-body)" }}>
+                Se alcanzó el límite de preguntas y quedan empates en puestos premiados. Revisa la configuración de premios; la exportación para sorteo corresponde al primer puesto.
+              </p>
+            ) : phaseId === "TIEBREAK" ? (
               <p style={{ color: "var(--yb-text-body)" }}>
                 Desempate en curso entre:{" "}
                 <strong>{tiebreak?.contenders?.map((p: any) => p.full_name).join(", ")}</strong>. Gana quien acierte; entre
@@ -531,7 +506,7 @@ export default function YambolyModeratorPage() {
                 ))}
                 <p style={{ color: "var(--yb-text-muted)", fontSize: "0.85rem" }}>
                   Empate técnico: mismos puntos y aciertos por dificultad, y menos de{" "}
-                  {(settings?.tieThresholdMs ?? 1000) / 1000}s de diferencia. Inicia el desempate para definir los premios.
+                  {(settings?.tieThresholdMs ?? 1000) / 1000}s de diferencia. Preguntas de desempate: {session.tiebreak_round} de {settings?.maxTiebreakQuestions ?? 3}.
                 </p>
               </div>
             ) : (
@@ -680,6 +655,8 @@ export default function YambolyModeratorPage() {
             )}
           </div>
         </div>
+
+        <ParticipantsPanel />
 
         {/* ADVANCED & EMERGENCY RESET */}
         <div className="yb-hud-panel" style={{ padding: "1.25rem 1.5rem" }}>

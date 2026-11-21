@@ -1,23 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
-import { registerYambolyParticipant } from "@/lib/yamboly-db";
+import { registerYambolyParticipant, YambolyUserError } from "@/lib/yamboly-db";
+
+const optional = (value: unknown) => value === undefined || typeof value === "string";
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
-    const { fullName, email, phone } = body;
+    const body = await req.json().catch(() => null);
+    const { dni, fullName, email } = body ?? {};
 
-    if (typeof fullName !== "string" || typeof email !== "string" || typeof phone !== "string") {
-      return NextResponse.json(
-        { error: "Por favor completa todos los campos requeridos." },
-        { status: 400 }
-      );
+    if (typeof dni !== "string" || !optional(fullName) || !optional(email)) {
+      return NextResponse.json({ error: "Ingresa tu DNI para inscribirte." }, { status: 400 });
     }
 
-    const participant = await registerYambolyParticipant({
-      fullName,
-      email,
-      phone,
-    });
+    const participant = await registerYambolyParticipant({ dni, fullName, email });
 
     const response = NextResponse.json({ success: true });
 
@@ -31,11 +26,11 @@ export async function POST(req: NextRequest) {
     });
 
     return response;
-  } catch (error: any) {
+  } catch (error) {
+    if (error instanceof YambolyUserError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
     console.error("Error in /api/yamboly/register:", error);
-    return NextResponse.json(
-      { error: error.message || "Error al registrar participante" },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: "No se pudo completar la inscripción. Intenta nuevamente." }, { status: 500 });
   }
 }

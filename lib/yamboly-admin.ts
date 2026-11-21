@@ -6,9 +6,11 @@ import {
   isGameStarted,
   logYambolyAudit,
   SESSION_ID,
+  YambolyUserError,
   type YambolySession,
 } from "./yamboly-db";
 import {
+  cleanParticipantName,
   DIFFICULTY_LABELS,
   requiredByDifficulty,
   SUGGESTED_BANK_SIZE,
@@ -22,7 +24,7 @@ import {
 // Cada cambio bloquea la sesión de juego (para no cruzarse con una acción del moderador),
 // aplica las reglas de bloqueo de la partida y queda en el historial.
 
-export class YambolyAdminError extends Error {}
+export class YambolyAdminError extends YambolyUserError {}
 
 const LOCKED_RULES = "La partida ya comenzó: las reglas quedan bloqueadas hasta reiniciarla desde la consola del moderador.";
 
@@ -73,6 +75,8 @@ export function parseQuestionFilters(params: Record<string, string | string[] | 
   return { category: one("categoria"), difficulty: one("dificultad"), type: one("tipo"), status: one("estado"), q: one("q") };
 }
 
+const escapeLike = (value: string) => `%${value.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+
 export async function getYambolyAdminData(filters: QuestionFilters, editId: number | null = null) {
   await ensureYambolyTables();
   const pool = getPool();
@@ -90,7 +94,7 @@ export async function getYambolyAdminData(filters: QuestionFilters, editId: numb
   if (filters.status === "publicada") where.push("q.active = TRUE AND q.used = FALSE");
   if (filters.status === "oculta") where.push("q.active = FALSE");
   if (filters.status === "jugada") where.push("q.used = TRUE");
-  if (filters.q) add("q.text ILIKE ?", `%${filters.q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`);
+  if (filters.q) add("q.text ILIKE ?", escapeLike(filters.q));
 
   const [session, categories, questions, prizes, readiness, audit, editing] = await Promise.all([
     pool.query("SELECT * FROM yamboly_sessions WHERE id = $1", [SESSION_ID]),
@@ -155,7 +159,7 @@ export async function updateGameSettings(settings: GameSettings, actor: string) 
     await ctx.client.query(
       `UPDATE yamboly_sessions SET
          reading_duration_sec = $2, answering_duration_sec = $3, points_per_correct = $4,
-         tie_threshold_ms = $5, difficulty_sequence = $6, total_rounds = $7, allow_late_entry = $8, updated_at = NOW()
+         tie_threshold_ms = $5, difficulty_sequence = $6, total_rounds = $7, allow_late_entry = $8, max_tiebreak_questions = $9, updated_at = NOW()
        WHERE id = $1`,
       [
         SESSION_ID,
@@ -166,6 +170,7 @@ export async function updateGameSettings(settings: GameSettings, actor: string) 
         settings.difficultySequence,
         settings.difficultySequence.length,
         settings.allowLateEntry,
+        settings.maxTiebreakQuestions,
       ]
     );
     const before = {
@@ -173,6 +178,7 @@ export async function updateGameSettings(settings: GameSettings, actor: string) 
       answeringDurationSec: ctx.session.answering_duration_sec,
       pointsPerCorrect: ctx.session.points_per_correct,
       tieThresholdMs: ctx.session.tie_threshold_ms,
+      maxTiebreakQuestions: ctx.session.max_tiebreak_questions,
       difficultySequence: ctx.session.difficulty_sequence,
       allowLateEntry: ctx.session.allow_late_entry,
     };
@@ -222,7 +228,7 @@ export async function updateCategory(id: number, input: CategoryInput, actor: st
 export async function setCategoryActive(id: number, active: boolean, actor: string) {
   return withSession(actor, async (ctx) => {
     const category = await lockedCategory(ctx, id);
-    if (ctx.session.current_category_id === id && !active && ["ROULETTE", "QUESTION_READING", "QUESTION_ANSWERING"].includes(ctx.session.status)) {
+    if (ctx.session.current_category_id === id && !active && ["ROULETTE", "QUESTION_READY", "QUESTION_READING", "QUESTION_ANSWERING"].includes(ctx.session.status)) {
       throw new YambolyAdminError("La categoría está en juego ahora mismo; espera a que termine la ronda.");
     }
     await ctx.client.query("UPDATE yamboly_categories SET active = $2 WHERE id = $1", [id, active]);
@@ -438,5 +444,55 @@ export async function deleteLastPrize(actor: string) {
     if (!last) throw new YambolyAdminError("No hay premios configurados.");
     await ctx.client.query("DELETE FROM yamboly_prizes WHERE id = $1", [last.id]);
     await audit(ctx, "PREMIO_ELIMINADO", "prize", last.place, `Quitó el premio del puesto ${last.place}: «${last.title}»`);
+  });
+}
+
+// ----------------- Inscritos -----------------
+
+async function lockedParticipant(ctx: Context, id: number) {
+  const row = (await ctx.client.query(
+    "SELECT * FROM yamboly_participants WHERE id = $1 AND session_id = $2 FOR UPDATE",
+    [id, SESSION_ID]
+  )).rows[0];
+  if (!row) throw new YambolyAdminError("Ese inscrito ya no existe.");
+  return row;
+}
+
+export type QuizParticipantRow = {
+  id: number;
+  full_name: string;
+  dni: string | null;
+  email: string | null;
+  created_at: string;
+  score: number;
+  from_fullday: boolean;
+};
+
+/** Inscritos al quiz para la consola del moderador, más recientes primero. */
+export async function listQuizParticipants(query = ""): Promise<QuizParticipantRow[]> {
+  await ensureYambolyTables();
+  const search = query.trim().slice(0, 120);
+  const res = await getPool().query(
+    `SELECT id, full_name, dni, email, created_at, score, registration_id IS NOT NULL AS from_fullday
+     FROM yamboly_participants
+     WHERE session_id = $1 ${search ? "AND (full_name ILIKE $2 OR dni ILIKE $2 OR email ILIKE $2)" : ""}
+     ORDER BY created_at DESC, id DESC`,
+    search ? [SESSION_ID, escapeLike(search)] : [SESSION_ID]
+  );
+  return res.rows;
+}
+
+export async function renameParticipant(id: number, name: unknown, actor: string) {
+  const parsed = cleanParticipantName(name);
+  if (!parsed.ok) throw new YambolyAdminError(parsed.error);
+  return withSession(actor, async (ctx) => {
+    const before = await lockedParticipant(ctx, id);
+    if (before.full_name === parsed.value) return false;
+    await ctx.client.query("UPDATE yamboly_participants SET full_name = $2 WHERE id = $1", [id, parsed.value]);
+    await audit(ctx, "INSCRITO_RENOMBRADO", "participant", id, `Cambió el nombre «${before.full_name}» por «${parsed.value}»`, {
+      antes: before.full_name,
+      despues: parsed.value,
+    });
+    return true;
   });
 }

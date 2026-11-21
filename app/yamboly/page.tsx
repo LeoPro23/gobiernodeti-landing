@@ -1,14 +1,61 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Clock, CheckCircle2, Award, Scale, Gift, Check, Sparkles } from "lucide-react";
 import { ConfettiCanvas } from "./components/ConfettiCanvas";
 import "./yamboly.css";
 
+const fieldLabelStyle: React.CSSProperties = { display: "block", fontSize: "0.85rem", fontWeight: 700, marginBottom: "6px", color: "var(--yb-text-body)" };
+const fieldInputStyle: React.CSSProperties = {
+  width: "100%",
+  padding: "0.95rem 1rem",
+  borderRadius: "14px",
+  background: "#ffffff",
+  border: "1.5px solid rgba(148, 163, 184, 0.35)",
+  color: "var(--yb-text-title)",
+  fontSize: "1rem",
+  outline: "none",
+};
+const primaryButtonStyle: React.CSSProperties = {
+  marginTop: "0.5rem",
+  padding: "1.1rem",
+  borderRadius: "16px",
+  background: "linear-gradient(135deg, var(--yb-primary) 0%, var(--yb-cyan) 100%)",
+  color: "#fff",
+  fontWeight: 900,
+  fontSize: "1.1rem",
+  border: "none",
+  cursor: "pointer",
+  boxShadow: "0 8px 24px rgba(230, 0, 126, 0.3)",
+};
+const linkButtonStyle: React.CSSProperties = {
+  background: "none",
+  border: "none",
+  color: "var(--yb-primary)",
+  fontWeight: 700,
+  fontSize: "0.95rem",
+  cursor: "pointer",
+  padding: "0.5rem",
+};
+
+async function postJson(url: string, body: unknown) {
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(json.error || "No se pudo completar la inscripción.");
+  return json;
+}
+
 export default function YambolyParticipantPage() {
+  // Registro en dos pasos: DNI y luego confirmar el nombre (inscritos del Fullday) o escribir nombre y correo.
+  const [registerStep, setRegisterStep] = useState<"dni" | "confirm" | "details">("dni");
+  const [dni, setDni] = useState("");
+  const [foundName, setFoundName] = useState("");
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
   const [isSubmittingRegister, setIsSubmittingRegister] = useState(false);
   const [registerError, setRegisterError] = useState<string | null>(null);
 
@@ -17,6 +64,7 @@ export default function YambolyParticipantPage() {
   const [isSendingAnswer, setIsSendingAnswer] = useState(false);
   const [timerRemaining, setTimerRemaining] = useState<number>(0);
   const [timerTotal, setTimerTotal] = useState<number>(1);
+  const clockOffset = useRef(0);
 
   const [token, setToken] = useState<string>("");
 
@@ -41,10 +89,11 @@ export default function YambolyParticipantPage() {
         if (!res.ok) return;
         const json = await res.json();
         if (isMounted) {
+          clockOffset.current = Date.parse(json.serverTime) - Date.now();
           setData(json);
 
           // Reset selection on new question / reading phase
-          if (json.session?.status === "QUESTION_READING") {
+          if (json.session?.status === "QUESTION_READY") {
             setSelectedOption(null);
           }
         }
@@ -79,47 +128,68 @@ export default function YambolyParticipantPage() {
 
     if (start && duration) {
       setTimerTotal(duration / 1000);
-      const timerInt = setInterval(() => {
-        const elapsed = (session.paused_at ? new Date(session.paused_at).getTime() : Date.now()) - start;
+      const tick = () => {
+        const elapsed = (session.paused_at ? new Date(session.paused_at).getTime() : Date.now() + clockOffset.current) - start;
         const left = Math.max(0, Math.ceil((duration - elapsed) / 1000));
         setTimerRemaining(left);
-      }, 250);
+      };
+      tick();
+      const timerInt = setInterval(tick, 250);
       return () => clearInterval(timerInt);
     } else {
       setTimerRemaining(0);
     }
   }, [data?.session?.status, data?.session?.reading_start_time, data?.session?.answering_start_time, data?.session?.paused_at]);
 
-  const handleRegister = async (e: React.FormEvent) => {
+  const handleLookup = async (e: React.FormEvent) => {
     e.preventDefault();
     setRegisterError(null);
+    if (!/^\d{8,12}$/.test(dni)) {
+      setRegisterError("Ingresa un DNI válido de 8 a 12 dígitos.");
+      return;
+    }
     setIsSubmittingRegister(true);
-
     try {
-      const res = await fetch("/api/yamboly/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fullName, email, phone }),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "Error al registrarse");
-
-      if (json.token && typeof window !== "undefined") {
-        try {
-          localStorage.setItem("yamboly_token", json.token);
-        } catch (e) {}
+    try {
+      const result = await postJson("/api/yamboly/register/lookup", { dni });
+      if (result.found) {
+        setFoundName(result.fullName);
+        setRegisterStep("confirm");
+      } else {
+        setRegisterStep("details");
       }
-
-      // Refresh state immediately
-      const tokenQuery = json.token ? `?token=${encodeURIComponent(json.token)}&t=${Date.now()}` : `?t=${Date.now()}`;
-      const stateRes = await fetch(`/api/yamboly/state${tokenQuery}`, { cache: "no-store" });
-      const stateJson = await stateRes.json();
-      setData(stateJson);
-    } catch (err: any) {
-      setRegisterError(err.message);
+    } catch (err) {
+      setRegisterError(err instanceof Error ? err.message : "No se pudo consultar el DNI.");
     } finally {
       setIsSubmittingRegister(false);
     }
+  };
+
+  const completeRegistration = async (body: { dni: string; fullName?: string; email?: string }) => {
+    setRegisterError(null);
+    setIsSubmittingRegister(true);
+    try {
+      const result = await postJson("/api/yamboly/register", body);
+      if (result.token && typeof window !== "undefined") {
+        try {
+          localStorage.setItem("yamboly_token", result.token);
+        } catch (e) {}
+      }
+      // Refresh state immediately
+      const tokenQuery = result.token ? `?token=${encodeURIComponent(result.token)}&t=${Date.now()}` : `?t=${Date.now()}`;
+      const stateRes = await fetch(`/api/yamboly/state${tokenQuery}`, { cache: "no-store" });
+      setData(await stateRes.json());
+    } catch (err) {
+      setRegisterError(err instanceof Error ? err.message : "No se pudo completar la inscripción.");
+    } finally {
+      setIsSubmittingRegister(false);
+    }
+  };
+
+  const changeDni = () => {
+    setRegisterStep("dni");
+    setFoundName("");
+    setRegisterError(null);
   };
 
   const handleSelectOption = async (optionId: string) => {
@@ -172,7 +242,7 @@ export default function YambolyParticipantPage() {
   const isContender = Boolean(participant?.is_tiebreak_contender);
   const tiebreakContenders: { id: number; full_name: string }[] = data?.tiebreak?.contenders ?? [];
   const spectatingTiebreak =
-    inTiebreak && !isContender && ["QUESTION_READING", "QUESTION_ANSWERING", "QUESTION_REVEAL"].includes(session?.status);
+    inTiebreak && !isContender && ["QUESTION_READY", "QUESTION_READING", "QUESTION_ANSWERING", "QUESTION_REVEAL"].includes(session?.status);
 
   const isWinner = session?.status === "PODIUM" && participant?.rank && participant.rank <= prizePlaces;
   const prizeForMe = prizes?.find((p: any) => p.place === participant?.rank);
@@ -254,95 +324,75 @@ export default function YambolyParticipantPage() {
               </div>
             )}
 
-            <form onSubmit={handleRegister} style={{ display: "flex", flexDirection: "column", gap: "1.1rem" }}>
-              <div>
-                <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 700, marginBottom: "6px", color: "var(--yb-text-body)" }}>
-                  Nombres completos *
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Ej. Ronald Melgarejo"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  style={{
-                    width: "100%",
-                    padding: "0.95rem 1rem",
-                    borderRadius: "14px",
-                    background: "#ffffff",
-                    border: "1.5px solid rgba(148, 163, 184, 0.35)",
-                    color: "var(--yb-text-title)",
-                    fontSize: "1rem",
-                    outline: "none",
-                  }}
-                />
-              </div>
+            {registerStep === "dni" && (
+              <form onSubmit={handleLookup} style={{ display: "flex", flexDirection: "column", gap: "1.1rem" }}>
+                <div>
+                  <label htmlFor="yb-dni" style={fieldLabelStyle}>DNI *</label>
+                  <input
+                    id="yb-dni"
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    required
+                    maxLength={12}
+                    placeholder="Ej. 12345678"
+                    value={dni}
+                    onChange={(e) => { setDni(e.target.value.replace(/\D/g, "")); setRegisterError(null); }}
+                    style={fieldInputStyle}
+                  />
+                </div>
+                <p style={{ fontSize: "0.85rem", color: "var(--yb-text-muted)", lineHeight: 1.4 }}>
+                  Si te inscribiste en el Fullday, entrarás con los datos de tu inscripción.
+                </p>
+                <button type="submit" disabled={isSubmittingRegister} style={primaryButtonStyle}>
+                  {isSubmittingRegister ? "Buscando..." : "Continuar"}
+                </button>
+              </form>
+            )}
 
-              <div>
-                <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 700, marginBottom: "6px", color: "var(--yb-text-body)" }}>
-                  Correo electrónico *
-                </label>
-                <input
-                  type="email"
-                  required
-                  placeholder="tu@correo.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  style={{
-                    width: "100%",
-                    padding: "0.95rem 1rem",
-                    borderRadius: "14px",
-                    background: "#ffffff",
-                    border: "1.5px solid rgba(148, 163, 184, 0.35)",
-                    color: "var(--yb-text-title)",
-                    fontSize: "1rem",
-                    outline: "none",
-                  }}
-                />
+            {registerStep === "confirm" && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "1.1rem", textAlign: "center" }}>
+                <p style={{ fontSize: "0.95rem", color: "var(--yb-text-muted)" }}>Encontramos tu inscripción al Fullday. ¿Eres tú?</p>
+                <p style={{ fontSize: "1.5rem", fontWeight: 900, lineHeight: 1.25, wordBreak: "break-word", color: "var(--yb-text-title)" }}>{foundName}</p>
+                <p style={{ fontSize: "0.85rem", color: "var(--yb-text-muted)", lineHeight: 1.4 }}>
+                  Tu nombre se mostrará en el ranking. Conserva este navegador para mantener tu participación.
+                </p>
+                <button type="button" disabled={isSubmittingRegister} onClick={() => completeRegistration({ dni })} style={primaryButtonStyle}>
+                  {isSubmittingRegister ? "Registrando..." : "Sí, soy yo · Entrar"}
+                </button>
+                <button type="button" disabled={isSubmittingRegister} onClick={changeDni} style={linkButtonStyle}>
+                  No soy yo, corregir el DNI
+                </button>
               </div>
+            )}
 
-              <div>
-                <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 700, marginBottom: "6px", color: "var(--yb-text-body)" }}>
-                  Teléfono / WhatsApp *
-                </label>
-                <input
-                  type="tel"
-                  required
-                  placeholder="987654321"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  style={{
-                    width: "100%",
-                    padding: "0.95rem 1rem",
-                    borderRadius: "14px",
-                    background: "#ffffff",
-                    border: "1.5px solid rgba(148, 163, 184, 0.35)",
-                    color: "var(--yb-text-title)",
-                    fontSize: "1rem",
-                    outline: "none",
-                  }}
-                />
-              </div>
-
-              <button
-                type="submit"
-                disabled={isSubmittingRegister}
-                style={{
-                  marginTop: "0.5rem",
-                  padding: "1.1rem",
-                  borderRadius: "16px",
-                  border: "none",
-                  background: "linear-gradient(135deg, var(--yb-primary) 0%, var(--yb-cyan) 100%)",
-                  color: "#ffffff",
-                  fontSize: "1.15rem",
-                  fontWeight: 900,
-                  cursor: "pointer",
-                  boxShadow: "0 8px 24px rgba(230, 0, 126, 0.3)",
-                }}
+            {registerStep === "details" && (
+              <form
+                onSubmit={(e) => { e.preventDefault(); completeRegistration({ dni, fullName, email }); }}
+                style={{ display: "flex", flexDirection: "column", gap: "1.1rem" }}
               >
-                {isSubmittingRegister ? "Ingresando..." : "¡Entrar a la Dinámica! 🚀"}
-              </button>
-            </form>
+                <p style={{ fontSize: "0.9rem", color: "var(--yb-text-muted)", lineHeight: 1.4 }}>
+                  No encontramos el DNI <strong>{dni}</strong> en la inscripción del Fullday. Completa tus datos para participar.
+                </p>
+                <div>
+                  <label htmlFor="yb-name" style={fieldLabelStyle}>Nombres y apellidos *</label>
+                  <input id="yb-name" type="text" required maxLength={200} autoComplete="name" placeholder="Ej. Ana Torres" value={fullName} onChange={(e) => setFullName(e.target.value)} style={fieldInputStyle} />
+                </div>
+                <div>
+                  <label htmlFor="yb-email" style={fieldLabelStyle}>Correo electrónico *</label>
+                  <input id="yb-email" type="email" required maxLength={200} autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} style={fieldInputStyle} />
+                </div>
+                <p style={{ fontSize: "0.85rem", color: "var(--yb-text-muted)", lineHeight: 1.4 }}>
+                  Usaremos estos datos para identificar a los participantes y coordinar la premiación. Tu nombre se mostrará en el ranking. Conserva este navegador para mantener tu participación.
+                </p>
+                <button type="submit" disabled={isSubmittingRegister} style={primaryButtonStyle}>
+                  {isSubmittingRegister ? "Registrando..." : "Entrar a la Dinámica"}
+                </button>
+                <button type="button" disabled={isSubmittingRegister} onClick={changeDni} style={linkButtonStyle}>
+                  Corregir el DNI
+                </button>
+              </form>
+            )}
           </div>
         ) : (
           /* STEP 2: ACTIVE GAME INTERFACE FOR REGISTERED PLAYER */
@@ -412,15 +462,32 @@ export default function YambolyParticipantPage() {
                     </div>
                   ))}
                 </div>
+                {!isContender && (
+                  <div style={{ marginTop: "1.25rem", fontSize: "1rem", color: "var(--yb-cyan)", fontWeight: 800 }}>
+                    Tu puntaje acumulado: {participant.score} puntos
+                  </div>
+                )}
                 <p style={{ color: "var(--yb-text-muted)", fontSize: "0.88rem" }}>
-                  Tu puntaje acumulado ({participant.score} pts) no cambia. Observa la pantalla del auditorio para ver la
-                  resolución.
+                  Observa la pantalla del auditorio para ver la resolución del desempate.
+                </p>
+              </div>
+            )}
+
+            {/* ROULETTE VIEW ON PHONE */}
+            {session?.status === "ROULETTE" && (
+              <div className="yb-hud-panel" style={{ padding: "3rem 1.5rem", textAlign: "center", margin: "auto 0" }}>
+                <div style={{ fontSize: "3.5rem", marginBottom: "0.5rem", animation: "spin 2s linear infinite" }}>
+                  🎡
+                </div>
+                <h2 style={{ fontSize: "1.6rem", fontWeight: 900 }}>¡Girando la Ruleta!</h2>
+                <p style={{ color: "var(--yb-text-muted)", fontSize: "1rem", marginTop: "0.5rem" }}>
+                  Observa la pantalla principal para descubrir el tema de la Ronda {session.current_round}.
                 </p>
               </div>
             )}
 
             {/* QUESTION READING PHASE - UNIFIED CARD */}
-            {session?.status === "QUESTION_READING" && currentQuestion && !spectatingTiebreak && (
+            {["QUESTION_READY", "QUESTION_READING"].includes(session?.status) && currentQuestion && !spectatingTiebreak && (
               <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center" }}>
                 <div
                   className="yb-hud-panel"
@@ -446,14 +513,14 @@ export default function YambolyParticipantPage() {
                       style={{
                         padding: "5px 14px",
                         borderRadius: "999px",
-                        background: `${currentQuestion.category_color}18`,
-                        color: currentQuestion.category_color,
+                        background: inTiebreak ? "rgba(255, 183, 3, 0.18)" : `${currentQuestion.category_color}18`,
+                        color: inTiebreak ? "#b45309" : currentQuestion.category_color,
                         fontSize: "0.85rem",
                         fontWeight: 900,
                         textTransform: "uppercase",
                       }}
                     >
-                      {currentQuestion.category_name}
+                      {inTiebreak ? "⚖️ DESEMPATE · LECTURA" : currentQuestion.category_name}
                     </div>
                     <div
                       style={{
@@ -470,7 +537,7 @@ export default function YambolyParticipantPage() {
                       }}
                     >
                       <Clock size={16} />
-                      {timerRemaining > 0 ? `${timerRemaining}s` : "¡Votación lista!"}
+                      {session.status === "QUESTION_READY" ? "Lectura pendiente" : session.paused_at ? `Pausado · ${timerRemaining}s` : timerRemaining > 0 ? `${timerRemaining}s` : "¡Votación lista!"}
                     </div>
                   </div>
 
@@ -531,7 +598,7 @@ export default function YambolyParticipantPage() {
                     }}
                   >
                     <Clock size={18} />
-                    {timerRemaining}s
+                    {session.paused_at ? `Pausado · ${timerRemaining}s` : `${timerRemaining}s`}
                   </div>
                 </div>
 
@@ -562,6 +629,8 @@ export default function YambolyParticipantPage() {
                       Tu voto está bloqueado. En <strong>{timerRemaining}s</strong> se revelará si acertaste en verde o rojo.
                     </p>
                   </div>
+                ) : timerRemaining <= 0 && !session.paused_at ? (
+                  <p className="yb-hud-panel" style={{ padding: "1.25rem", textAlign: "center" }}>La votación terminó. Espera la revelación de la respuesta.</p>
                 ) : (
                   <div style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}>
                     {currentQuestion.options?.map((opt: any) => (
@@ -737,7 +806,11 @@ export default function YambolyParticipantPage() {
 
                 <p style={{ color: "var(--yb-text-muted)", fontSize: "0.95rem" }}>
                   {participant.tied && session.current_round >= session.total_rounds && participant.rank <= prizePlaces
-                    ? "⚖️ Estás en un empate técnico por un puesto premiado. Atento al celular: puede haber una pregunta de desempate."
+                    ? data?.tiebreak?.drawPending
+                      ? "⚖️ El empate por el primer puesto se definirá mediante un sorteo externo."
+                      : "⚖️ Estás en un empate técnico por un puesto premiado. Atento al celular: puede haber una pregunta de desempate."
+                    : session.status === "PODIUM" && participant.rank && participant.rank <= prizePlaces
+                    ? "🎉 ¡Estás en el Podio de Premios Yámboly! Acércate a la mesa de premiación."
                     : participant.rank && participant.rank <= prizePlaces
                     ? "🔥 ¡Vas en zona de premios! Mantén la concentración para las siguientes rondas."
                     : "Mira la pantalla del auditorio para ver la tabla completa."}

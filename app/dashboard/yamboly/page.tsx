@@ -4,7 +4,7 @@ import { requireAdmin } from "@/lib/admin-auth"
 import { getYambolyAdminData, parseQuestionFilters } from "@/lib/yamboly-admin"
 import { DIFFICULTIES, DIFFICULTY_LABELS, IMPORT_TEMPLATE, MAX_ROUNDS, OPTION_IDS } from "@/lib/yamboly-rules"
 import { DashboardTabs } from "../dashboard-ui"
-import { ActionForm } from "./action-form"
+import { ActionForm } from "../action-form"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -16,6 +16,7 @@ const dateFormat = new Intl.DateTimeFormat("es-PE", { dateStyle: "short", timeSt
 const STATUS_LABELS: Record<string, string> = {
   WAITING_REGISTRATION: "Inscripción",
   ROULETTE: "Ruleta",
+  QUESTION_READY: "Pregunta visible, lectura pendiente",
   QUESTION_READING: "Lectura de pregunta",
   QUESTION_ANSWERING: "Respuestas abiertas",
   QUESTION_REVEAL: "Respuesta revelada",
@@ -110,9 +111,9 @@ export default async function YambolyAdminPage({ searchParams }: { searchParams:
             {readiness.bank >= readiness.suggestedBank ? <CheckCircle2 size={18} aria-hidden="true" /> : <AlertTriangle size={18} aria-hidden="true" />}
             <span><strong>Banco</strong> {readiness.bank} preguntas publicadas · se sugieren {readiness.suggestedBank}</span>
           </div>
-          <div className={readiness.tiebreakAvailable >= 2 ? "qa-ready qa-ready-ok" : "qa-ready qa-ready-warn"}>
-            {readiness.tiebreakAvailable >= 2 ? <CheckCircle2 size={18} aria-hidden="true" /> : <AlertTriangle size={18} aria-hidden="true" />}
-            <span><strong>Desempate</strong> {readiness.tiebreakAvailable} {readiness.tiebreakAvailable === 1 ? "pregunta reservada" : "preguntas reservadas"}{readiness.tiebreakAvailable < 2 ? " · si se agotan se usan preguntas del banco general" : ""}</span>
+          <div className={readiness.tiebreakAvailable >= session.max_tiebreak_questions ? "qa-ready qa-ready-ok" : "qa-ready qa-ready-warn"}>
+            {readiness.tiebreakAvailable >= session.max_tiebreak_questions ? <CheckCircle2 size={18} aria-hidden="true" /> : <AlertTriangle size={18} aria-hidden="true" />}
+            <span><strong>Desempate</strong> {readiness.tiebreakAvailable} {readiness.tiebreakAvailable === 1 ? "pregunta reservada" : "preguntas reservadas"} · máximo {session.max_tiebreak_questions}{readiness.tiebreakAvailable < session.max_tiebreak_questions ? " · si se agotan se usan preguntas del banco general" : ""}</span>
           </div>
           <div className={prizes.length ? "qa-ready qa-ready-ok" : "qa-ready qa-ready-warn"}>
             {prizes.length ? <CheckCircle2 size={18} aria-hidden="true" /> : <AlertTriangle size={18} aria-hidden="true" />}
@@ -132,6 +133,7 @@ export default async function YambolyAdminPage({ searchParams }: { searchParams:
               <label>Tiempo para responder (s)<input type="number" name="answeringDurationSec" min={5} max={120} required defaultValue={session.answering_duration_sec} /></label>
               <label>Puntos por acierto<input type="number" name="pointsPerCorrect" min={1} max={100} required defaultValue={session.points_per_correct} /></label>
               <label>Umbral de empate técnico (ms)<input type="number" name="tieThresholdMs" min={0} max={10000} step={100} required defaultValue={session.tie_threshold_ms} /></label>
+              <label>Máximo de preguntas de desempate<input type="number" name="maxTiebreakQuestions" min={1} max={20} required defaultValue={session.max_tiebreak_questions} /></label>
             </div>
             <fieldset className="qa-rounds"><legend>Rondas y dificultad (deja «—» para no usar la ronda)</legend>
               {Array.from({ length: MAX_ROUNDS }, (_, index) => <label key={index}>Ronda {index + 1}
