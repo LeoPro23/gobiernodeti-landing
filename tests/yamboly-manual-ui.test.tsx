@@ -49,6 +49,31 @@ describe("control manual del moderador", () => {
     expect(JSON.parse(post![1]!.body as string).action.type).toBe("START_TIEBREAK_QUESTION");
   });
 
+  it("ofrece reiniciar manteniendo o borrando a los inscritos", async () => {
+    const state = {
+      serverTime: new Date().toISOString(),
+      session: { status: "WAITING_REGISTRATION", current_round: 0, total_rounds: 5, paused_at: null, tiebreak_round: 0, is_registration_open: true },
+      settings: { readingDurationSec: 8, answeringDurationSec: 20 },
+      participantsCount: 12, answeredCount: 0, playedQuestions: [], remainingPerCategory: [],
+      tiebreak: { required: false, contenders: [], groups: [] }, prizePlaces: 1,
+    };
+    const fetchMock = vi.fn(async (_url: string, options?: RequestInit) => ({
+      ok: true,
+      json: async () => options?.method === "POST" ? { success: true } : state,
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const confirmMock = vi.fn(() => true);
+    vi.stubGlobal("confirm", confirmMock);
+    render(<YambolyModeratorPage />);
+    const showOptions = await screen.findByRole("button", { name: /Mostrar Opciones/ });
+    await act(async () => { fireEvent.click(showOptions); });
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: /Reiniciar y borrar inscritos/ })); });
+    expect(confirmMock).toHaveBeenCalledWith(expect.stringContaining("los 12 inscritos"));
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: /mantener inscritos/ })); });
+    const posts = fetchMock.mock.calls.filter(([, options]) => options?.method === "POST").map(([, options]) => JSON.parse(options!.body as string).action);
+    expect(posts).toEqual([{ type: "RESET_GAME", clearParticipants: true }, { type: "RESET_GAME" }]);
+  });
+
   it("espera al fin de lectura y no inicia la votación por sí sola", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-11-21T12:00:00Z"));

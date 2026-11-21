@@ -214,4 +214,17 @@ describe.skipIf(!url)("Yámboly contra PostgreSQL", () => {
     await act("RESET_GAME")
     expect((await session()).status).toBe("WAITING_REGISTRATION")
   })
+
+  it("reinicia la partida y, si se pide, borra a los inscritos", async () => {
+    await pool.query("UPDATE yamboly_sessions SET status = 'PODIUM', paused_at = NULL")
+    await db.executeModeratorAction({ type: "RESET_GAME" }, "test@fullday")
+    expect((await pool.query("SELECT COUNT(*)::int AS n FROM yamboly_participants")).rows[0].n).toBe(4)
+
+    await pool.query("UPDATE yamboly_sessions SET status = 'PODIUM'")
+    await db.executeModeratorAction({ type: "RESET_GAME", clearParticipants: true }, "test@fullday")
+    expect((await pool.query("SELECT COUNT(*)::int AS n FROM yamboly_participants")).rows[0].n).toBe(0)
+    expect(await db.getParticipantByToken(players[0].token)).toBeNull()
+    const last = (await pool.query("SELECT summary FROM yamboly_audit_log ORDER BY id DESC LIMIT 1")).rows[0]
+    expect(last.summary).toContain("borró 4 inscritos")
+  })
 })

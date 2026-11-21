@@ -63,14 +63,14 @@ export default function YambolyModeratorPage() {
     return () => clearInterval(interval);
   }, []);
 
-  const triggerAction = async (action: string) => {
+  const triggerAction = async (action: string, options: Record<string, unknown> = {}) => {
     setIsActionLoading(true);
     setActionError(null);
     try {
       const res = await fetch("/api/yamboly/admin", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: typeof action === "string" ? { type: action } : action }),
+        body: JSON.stringify({ action: { ...options, type: action } }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Error al ejecutar acción");
@@ -686,28 +686,51 @@ export default function YambolyModeratorPage() {
           {showAdvanced && (
             <div style={{ marginTop: "1.25rem", paddingTop: "1.25rem", borderTop: "1px solid rgba(148, 163, 184, 0.2)" }}>
               <p style={{ fontSize: "0.85rem", color: "var(--yb-text-muted)", marginBottom: "1rem" }}>
-                Si necesitás reiniciar la partida a cero para un ensayo o borrar puntajes de prueba:
+                Reinicia la partida a cero (rondas, puntajes y respuestas). Para una partida con otro público, usa la segunda opción: también borra a los inscritos y sus celulares vuelven al registro.
               </p>
-              <button
-                disabled={isActionLoading}
-                onClick={() => {
-                  if (confirm("¿Estás seguro de reiniciar la partida completa? Se borrarán todos los puntajes y respuestas.")) {
-                    triggerAction("RESET_GAME");
-                  }
-                }}
-                style={{
-                  padding: "0.75rem 1.5rem",
-                  borderRadius: "14px",
-                  background: "rgba(239, 68, 68, 0.12)",
-                  border: "1.5px solid var(--yb-red)",
-                  color: "var(--yb-red)",
-                  fontWeight: 800,
-                  fontSize: "0.9rem",
-                  cursor: "pointer",
-                }}
-              >
-                ⚠️ Reiniciar Juego Completo (Puntajes y Rondas a 0)
-              </button>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "0.75rem" }}>
+                <button
+                  disabled={isActionLoading}
+                  onClick={() => {
+                    if (confirm("¿Reiniciar la partida? Se borrarán puntajes y respuestas; los inscritos se mantienen.")) {
+                      triggerAction("RESET_GAME");
+                    }
+                  }}
+                  style={{
+                    padding: "0.75rem 1.5rem",
+                    borderRadius: "14px",
+                    background: "rgba(239, 68, 68, 0.12)",
+                    border: "1.5px solid var(--yb-red)",
+                    color: "var(--yb-red)",
+                    fontWeight: 800,
+                    fontSize: "0.9rem",
+                    cursor: "pointer",
+                  }}
+                >
+                  ⚠️ Reiniciar juego (mantener inscritos)
+                </button>
+                <button
+                  disabled={isActionLoading}
+                  onClick={() => {
+                    const count = Number(data?.participantsCount || 0);
+                    if (confirm(`¿Reiniciar la partida y borrar a ${count === 1 ? "1 inscrito" : `los ${count} inscritos`}? Esta acción no se puede deshacer: tendrán que registrarse de nuevo.`)) {
+                      triggerAction("RESET_GAME", { clearParticipants: true });
+                    }
+                  }}
+                  style={{
+                    padding: "0.75rem 1.5rem",
+                    borderRadius: "14px",
+                    background: "var(--yb-red)",
+                    border: "1.5px solid var(--yb-red)",
+                    color: "#fff",
+                    fontWeight: 800,
+                    fontSize: "0.9rem",
+                    cursor: "pointer",
+                  }}
+                >
+                  🧹 Reiniciar y borrar inscritos
+                </button>
+              </div>
             </div>
           )}
         </div>

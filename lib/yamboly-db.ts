@@ -882,6 +882,8 @@ export async function executeModeratorAction(action: {
   type: ModeratorActionType;
   categoryId?: number;
   questionId?: number;
+  /** Solo para RESET_GAME: además de reiniciar, borra a los inscritos para empezar una partida nueva. */
+  clearParticipants?: boolean;
 }, actor = "moderador") {
   await ensureYambolyTables();
   const sessionId = action.sessionId || SESSION_ID;
@@ -1146,7 +1148,13 @@ export async function executeModeratorAction(action: {
       );
       await pool.query("UPDATE yamboly_questions SET used = FALSE");
       await pool.query("DELETE FROM yamboly_answers WHERE session_id = $1", [sessionId]);
-      await pool.query("UPDATE yamboly_participants SET score = 0, correct_count = 0, total_response_time_ms = 0 WHERE session_id = $1", [sessionId]);
+      if (action.clearParticipants === true) {
+        // Sus celulares vuelven al formulario de registro: el token guardado ya no corresponde a nadie.
+        const removed = await pool.query("DELETE FROM yamboly_participants WHERE session_id = $1", [sessionId]);
+        summary = `Reinició la partida y borró ${removed.rowCount ?? 0} inscrito${removed.rowCount === 1 ? "" : "s"}`;
+      } else {
+        await pool.query("UPDATE yamboly_participants SET score = 0, correct_count = 0, total_response_time_ms = 0 WHERE session_id = $1", [sessionId]);
+      }
       break;
     }
   }
