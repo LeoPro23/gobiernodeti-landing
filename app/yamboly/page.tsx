@@ -50,6 +50,10 @@ async function postJson(url: string, body: unknown) {
   return json;
 }
 
+function legacyToken() {
+  try { return localStorage.getItem("yamboly_token") || ""; } catch { return ""; }
+}
+
 export default function YambolyParticipantPage() {
   // Registro en dos pasos: DNI y luego confirmar el nombre (inscritos del Fullday) o escribir nombre y correo.
   const [registerStep, setRegisterStep] = useState<"dni" | "confirm" | "details">("dni");
@@ -67,21 +71,12 @@ export default function YambolyParticipantPage() {
   const [timerTotal, setTimerTotal] = useState<number>(1);
   const clockOffset = useRef(0);
 
-  const [token, setToken] = useState<string>("");
-
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("yamboly_token") || "";
-      if (saved) setToken(saved);
-    }
-  }, []);
-
   // Poll state every 650ms for snappy real-time responsiveness
   useEffect(() => {
     let isMounted = true;
     const fetchState = async () => {
       try {
-        const savedToken = typeof window !== "undefined" ? localStorage.getItem("yamboly_token") || "" : "";
+        const savedToken = legacyToken();
         const tokenQuery = savedToken ? `&token=${encodeURIComponent(savedToken)}` : "";
         const res = await fetch(`/api/yamboly/state?t=${Date.now()}${tokenQuery}`, {
           cache: "no-store",
@@ -152,7 +147,12 @@ export default function YambolyParticipantPage() {
     setIsSubmittingRegister(true);
     try {
       const result = await postJson("/api/yamboly/register/lookup", { dni });
-      if (result.found) {
+      if (result.recovered) {
+        try { localStorage.removeItem("yamboly_token"); } catch { /* La cookie identifica al participante. */ }
+        const stateRes = await fetch(`/api/yamboly/state?t=${Date.now()}`, { cache: "no-store", credentials: "include" });
+        if (!stateRes.ok) throw new Error("No se pudo recuperar tu participación. Intenta nuevamente.");
+        setData(await stateRes.json());
+      } else if (result.found) {
         setFoundName(result.fullName);
         setRegisterStep("confirm");
       } else {
@@ -169,15 +169,10 @@ export default function YambolyParticipantPage() {
     setRegisterError(null);
     setIsSubmittingRegister(true);
     try {
-      const result = await postJson("/api/yamboly/register", body);
-      if (result.token && typeof window !== "undefined") {
-        try {
-          localStorage.setItem("yamboly_token", result.token);
-        } catch (e) {}
-      }
+      await postJson("/api/yamboly/register", body);
+      try { localStorage.removeItem("yamboly_token"); } catch { /* La cookie identifica al participante. */ }
       // Refresh state immediately
-      const tokenQuery = result.token ? `?token=${encodeURIComponent(result.token)}&t=${Date.now()}` : `?t=${Date.now()}`;
-      const stateRes = await fetch(`/api/yamboly/state${tokenQuery}`, { cache: "no-store" });
+      const stateRes = await fetch(`/api/yamboly/state?t=${Date.now()}`, { cache: "no-store", credentials: "include" });
       setData(await stateRes.json());
     } catch (err) {
       setRegisterError(err instanceof Error ? err.message : "No se pudo completar la inscripción.");
@@ -219,7 +214,7 @@ export default function YambolyParticipantPage() {
       if (!res.ok) throw new Error(json.error || "Error al enviar respuesta");
 
       // Update state
-      const storedToken = typeof window !== "undefined" ? localStorage.getItem("yamboly_token") : null;
+      const storedToken = legacyToken();
       const tokenQuery = storedToken ? `?token=${encodeURIComponent(storedToken)}&t=${Date.now()}` : `?t=${Date.now()}`;
       const stateRes = await fetch(`/api/yamboly/state${tokenQuery}`, { cache: "no-store" });
       const stateJson = await stateRes.json();

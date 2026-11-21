@@ -72,7 +72,7 @@ describe.skipIf(!url)("Yámboly contra PostgreSQL", () => {
   it("registro con DNI: confirma el nombre del Fullday y evita duplicados", async () => {
     expect(await db.lookupYambolyDni("40000002")).toEqual({ found: true, fullName: "Luis Gómez" })
     expect(await db.lookupYambolyDni("49999999")).toEqual({ found: false })
-    await expect(db.lookupYambolyDni("40000001")).rejects.toThrow("ya está inscrito")
+    expect(await db.lookupYambolyDni("40000001")).toEqual({ recovered: true, token: players[0].token })
     await expect(db.lookupYambolyDni("123")).rejects.toThrow("DNI válido")
     await expect(db.registerYambolyParticipant({ dni: "50000000", fullName: "Beto bis", email: "x@test.pe" })).rejects.toThrow("DNI ya está inscrito")
     await expect(db.registerYambolyParticipant({ dni: "50000009", fullName: "Beto bis", email: "BETO@test.pe" })).rejects.toThrow("correo ya está inscrito")
@@ -99,6 +99,11 @@ describe.skipIf(!url)("Yámboly contra PostgreSQL", () => {
     for (let roundIndex = 0; roundIndex < 3; roundIndex++) {
       await act("SPIN_ROULETTE")
       const q = await correctOption()
+      if (roundIndex === 0) {
+        expect(await db.lookupYambolyDni("40000001")).toEqual({ recovered: true, token: players[0].token })
+        await expect(db.lookupYambolyDni("40000002")).rejects.toThrow("cerrado")
+        expect((await pool.query("SELECT COUNT(*)::int AS n FROM yamboly_participants")).rows[0].n).toBe(4)
+      }
       expect((await pool.query("SELECT is_tiebreaker FROM yamboly_questions WHERE id = $1", [q.questionId])).rows[0].is_tiebreaker).toBe(false)
       await expect(act("START_READING")).rejects.toThrow("no permitida")
       await act("SHOW_QUESTION")
@@ -193,6 +198,7 @@ describe.skipIf(!url)("Yámboly contra PostgreSQL", () => {
     expect((await session()).tiebreak_participant_ids.sort()).toEqual([players[0].id, players[1].id].sort())
     await act("START_TIEBREAK_QUESTION"); await act("START_READING"); await finishReading(); await act("START_ANSWERING")
     const tb = await correctOption()
+    expect(await db.lookupYambolyDni("40000001")).toEqual({ recovered: true, token: players[0].token })
     await expect(answer(3, tb.questionId, tb.correct)).rejects.toThrow("solo para los participantes empatados")
     // Durante el desempate no se aceptan inscripciones.
     await expect(db.registerYambolyParticipant({ dni: "70000000", fullName: "Tarde", email: "tarde@test.pe" })).rejects.toThrow()

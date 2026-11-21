@@ -19,7 +19,7 @@ const REVEALED = ["QUESTION_REVEAL", "ROUND_RANKING", "PODIUM"];
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
-    const token = searchParams.get("token") || req.cookies.get("yamboly_token")?.value;
+    const token = req.cookies.get("yamboly_token")?.value || searchParams.get("token");
 
     const session = await getYambolySession(SESSION_ID);
     if (!session) {

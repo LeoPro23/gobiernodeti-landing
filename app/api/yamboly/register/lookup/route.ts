@@ -27,6 +27,14 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json().catch(() => null);
     const result = await lookupYambolyDni(body?.dni);
+    if ("recovered" in result) {
+      const response = NextResponse.json({ recovered: true }, { headers: { "Cache-Control": "no-store" } });
+      response.cookies.set("yamboly_token", result.token, {
+        path: "/", maxAge: 60 * 60 * 24 * 7, sameSite: "lax", httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+      });
+      return response;
+    }
     return NextResponse.json(result, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     if (error instanceof YambolyUserError) {

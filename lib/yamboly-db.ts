@@ -616,18 +616,31 @@ async function findFulldayRegistration(db: Queryable, dni: string): Promise<{ id
   return res.rows[0] ?? null;
 }
 
-/** Primer paso del registro: si el DNI está inscrito en el Fullday, devuelve solo el nombre para que la persona lo confirme. */
-export async function lookupYambolyDni(value: unknown, sessionId = SESSION_ID): Promise<{ found: true; fullName: string } | { found: false }> {
+/** Recupera primero a los inscritos del quiz; para nuevos participantes consulta el Fullday. */
+export async function lookupYambolyDni(value: unknown, sessionId = SESSION_ID): Promise<{ recovered: true; token: string } | { found: true; fullName: string } | { found: false }> {
   await ensureYambolyTables();
   const dni = requireDni(value);
-  const pool = getPool();
-  const session = await getYambolySession(sessionId);
-  if (!session) throw new YambolyUserError("La dinámica no está disponible.");
-  const blocked = registrationBlocked(session);
-  if (blocked) throw new YambolyUserError(blocked);
-  await assertDniAvailable(pool, sessionId, dni);
-  const registration = await findFulldayRegistration(pool, dni);
-  return registration ? { found: true, fullName: registration.full_name } : { found: false };
+  const client = await getPool().connect();
+  try {
+    await client.query("BEGIN");
+    const session = (await client.query("SELECT * FROM yamboly_sessions WHERE id = $1 FOR UPDATE", [sessionId])).rows[0] as YambolySession | undefined;
+    if (!session) throw new YambolyUserError("La dinámica no está disponible.");
+    const existing = await client.query("SELECT token FROM yamboly_participants WHERE session_id = $1 AND dni = $2 LIMIT 1", [sessionId, dni]);
+    if (existing.rows[0]) {
+      await client.query("COMMIT");
+      return { recovered: true, token: existing.rows[0].token };
+    }
+    const blocked = registrationBlocked(session);
+    if (blocked) throw new YambolyUserError(blocked);
+    const registration = await findFulldayRegistration(client, dni);
+    await client.query("COMMIT");
+    return registration ? { found: true, fullName: registration.full_name } : { found: false };
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 export type ParticipantInput = { dni: unknown; fullName?: unknown; email?: unknown };

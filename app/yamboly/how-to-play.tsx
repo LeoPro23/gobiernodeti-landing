@@ -7,7 +7,7 @@ const REGISTER_STEPS: ReactNode[] = [
   <>Escanea el <strong>código QR</strong> de la pantalla del auditorio o abre esta página en tu celular.</>,
   <>Escribe tu <strong>DNI</strong> y toca <strong>«Continuar»</strong>.</>,
   <>Si te inscribiste en el Fullday, verás tu nombre: toca <strong>«Sí, soy yo · Entrar»</strong>. Si no, escribe tus nombres y tu correo.</>,
-  <>Cuando veas la <strong>«Sala de espera»</strong> ya estás inscrito. No cierres ni cambies de navegador: tu participación queda guardada en él.</>,
+  <>Si ya participas en el quiz, puedes volver a ingresar con tu <strong>DNI</strong> y continuar desde la etapa actual.</>,
 ];
 
 function answerSteps({ readingSec, answeringSec, points }: Settings): ReactNode[] {
