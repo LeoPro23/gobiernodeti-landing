@@ -113,6 +113,18 @@ export async function getFilterOptions(): Promise<FilterOptions> {
     cycles: (row.cycles ?? []).sort((a, b) => a.localeCompare(b, "es", { numeric: true })) }
 }
 
+/** Inscritos con asistencia marcada, en orden alfabético, para la exportación a Excel. */
+export async function getAttendees() {
+  await requireAdmin()
+  await ensureRegistrationTable()
+  const result = await getPool().query<{ full_name: string; telefono: string | null }>(`
+    SELECT concat_ws(' ', trim(nombres), NULLIF(trim(apellidos), '')) AS full_name, telefono
+    FROM registrations
+    WHERE asistio
+    ORDER BY lower(concat_ws(' ', trim(nombres), NULLIF(trim(apellidos), ''))), id`)
+  return result.rows
+}
+
 export async function getAdminRegistrations(params: SearchParams) {
   // Authorization belongs at the data access boundary, not only in the UI.
   await requireAdmin()
