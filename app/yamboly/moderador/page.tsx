@@ -584,6 +584,12 @@ export default function YambolyModeratorPage() {
                     );
                   })}
                 </div>
+                {currentQuestion.explanation && (
+                  <div className="yb-answer-explanation yb-answer-explanation-mobile" role="note" style={{ marginTop: "1rem" }}>
+                    <CheckCircle2 size={18} aria-hidden="true" style={{ flexShrink: 0, color: "var(--yb-green)" }} />
+                    <p>{currentQuestion.explanation}</p>
+                  </div>
+                )}
               </div>
             ) : (
               <div style={{ textAlign: "center", padding: "2.5rem 1rem", color: "var(--yb-text-muted)" }}>

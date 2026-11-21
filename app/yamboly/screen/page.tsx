@@ -725,6 +725,13 @@ export default function YambolyScreenPage() {
                 );
               })}
             </div>
+
+            {status === "QUESTION_REVEAL" && currentQuestion.explanation && (
+              <div className="yb-answer-explanation" role="note">
+                <CheckCircle2 size={26} aria-hidden="true" style={{ flexShrink: 0, color: "var(--yb-green)" }} />
+                <p>{currentQuestion.explanation}</p>
+              </div>
+            )}
           </div>
         )}
 

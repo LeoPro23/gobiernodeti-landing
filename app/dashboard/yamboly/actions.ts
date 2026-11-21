@@ -44,6 +44,7 @@ function questionFromForm(form: FormData) {
     correctOptionId: form.get("correct"),
     difficulty: form.get("difficulty"),
     isTiebreaker: form.get("isTiebreaker"),
+    explanation: form.get("explanation"),
   })
   if (!parsed.ok) throw new YambolyAdminError(parsed.error)
   return parsed.value
@@ -126,6 +127,7 @@ export async function yambolyAdminAction(_state: AdminFormState, form: FormData)
         const result = await importQuestions(parsed.questions, actor)
         const parts = [`${result.inserted} pregunta${result.inserted === 1 ? " importada" : "s importadas"}`]
         if (result.skipped) parts.push(`${result.skipped} ya existían y se omitieron`)
+        if (result.described) parts.push(`a ${result.described} de ellas se les agregó la descripción`)
         if (result.createdCategories.length) parts.push(`categorías nuevas: ${result.createdCategories.join(", ")}`)
         return success(`${parts.join(" · ")}.`)
       }

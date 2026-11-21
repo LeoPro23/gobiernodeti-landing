@@ -93,6 +93,8 @@ export async function GET(req: NextRequest) {
           options: q.options,
           difficulty: q.difficulty,
           correct_option_id: shouldReveal ? q.correct_option_id : undefined,
+          // La descripción de la respuesta también se envía solo al revelarla.
+          explanation: shouldReveal ? q.explanation || null : undefined,
         };
 
         const countRes = await pool.query(

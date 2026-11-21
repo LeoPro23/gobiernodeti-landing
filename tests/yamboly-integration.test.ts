@@ -47,7 +47,13 @@ describe.skipIf(!url)("Yámboly contra PostgreSQL", () => {
   it("prepara la partida: parámetros, pregunta de desempate y participantes", async () => {
     await admin.updateGameSettings({ readingDurationSec: 8, answeringDurationSec: 20, pointsPerCorrect: 5, tieThresholdMs: 1000, maxTiebreakQuestions: 3, difficultySequence: ["FACIL", "INTERMEDIA", "DIFICIL"], allowLateEntry: false }, "test@fullday")
     const categoryId = (await db.getYambolyCategories())[0].id
-    await admin.createQuestion(categoryId, { text: "¿Pregunta de desempate?", options: [{ id: "A", text: "Sí" }, { id: "B", text: "No" }], correctOptionId: "A", difficulty: "DIFICIL", isTiebreaker: true }, "test@fullday")
+    const tiebreakId = await admin.createQuestion(categoryId, { text: "¿Pregunta de desempate?", options: [{ id: "A", text: "Sí" }, { id: "B", text: "No" }], correctOptionId: "A", difficulty: "DIFICIL", isTiebreaker: true, explanation: "Porque sí." }, "test@fullday")
+    expect((await db.getYambolyCurrentQuestion(tiebreakId)).explanation).toBe("Porque sí.")
+    // Reimportar una pregunta existente no la duplica, pero completa su descripción si no tenía.
+    const seeded = (await pool.query("SELECT q.id, q.text, c.name FROM yamboly_questions q JOIN yamboly_categories c ON c.id = q.category_id WHERE q.explanation IS NULL LIMIT 1")).rows[0]
+    const result = await admin.importQuestions([{ category: seeded.name, text: seeded.text, options: [{ id: "A", text: "x" }, { id: "B", text: "y" }], correctOptionId: "A", difficulty: "FACIL", isTiebreaker: false, explanation: "Descripción añadida." }], "test@fullday")
+    expect(result).toMatchObject({ inserted: 0, skipped: 1, described: 1 })
+    expect((await db.getYambolyCurrentQuestion(seeded.id)).explanation).toBe("Descripción añadida.")
     // Ana está inscrita en el Fullday: entra solo con su DNI. Los demás escriben nombre y correo.
     await pool.query("DELETE FROM registrations WHERE dni IN ('40000001', '40000002')")
     await pool.query(`INSERT INTO registrations (nombres, apellidos, dni, universidad, carrera, ciclo)

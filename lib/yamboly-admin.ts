@@ -260,7 +260,7 @@ async function assertCategory(ctx: Context, categoryId: number) {
   if (!row) throw new YambolyAdminError("Elige una categoría existente.");
 }
 
-function snapshot(row: { category_id: number; text: string; options: unknown; correct_option_id: string; difficulty: string; is_tiebreaker: boolean }) {
+function snapshot(row: { category_id: number; text: string; options: unknown; correct_option_id: string; difficulty: string; is_tiebreaker: boolean; explanation: string | null }) {
   return {
     categoryId: row.category_id,
     text: row.text,
@@ -268,6 +268,7 @@ function snapshot(row: { category_id: number; text: string; options: unknown; co
     correctOptionId: row.correct_option_id,
     difficulty: row.difficulty,
     isTiebreaker: row.is_tiebreaker,
+    explanation: row.explanation ?? "",
   };
 }
 
@@ -277,9 +278,9 @@ export async function createQuestion(categoryId: number, input: QuestionInput, a
   return withSession(actor, async (ctx) => {
     await assertCategory(ctx, categoryId);
     const res = await ctx.client.query(
-      `INSERT INTO yamboly_questions (category_id, text, options, correct_option_id, difficulty, is_tiebreaker)
-       VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
-      [categoryId, input.text, JSON.stringify(input.options), input.correctOptionId, input.difficulty, input.isTiebreaker]
+      `INSERT INTO yamboly_questions (category_id, text, options, correct_option_id, difficulty, is_tiebreaker, explanation)
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+      [categoryId, input.text, JSON.stringify(input.options), input.correctOptionId, input.difficulty, input.isTiebreaker, input.explanation || null]
     );
     await audit(ctx, "PREGUNTA_CREADA", "question", res.rows[0].id,
       `Creó la pregunta #${res.rows[0].id}${input.isTiebreaker ? " (desempate)" : ""}`, { categoryId, ...input });
@@ -294,8 +295,8 @@ export async function updateQuestion(id: number, categoryId: number, input: Ques
     await assertCategory(ctx, categoryId);
     await ctx.client.query(
       `UPDATE yamboly_questions SET category_id = $2, text = $3, options = $4, correct_option_id = $5,
-         difficulty = $6, is_tiebreaker = $7, updated_at = NOW() WHERE id = $1`,
-      [id, categoryId, input.text, JSON.stringify(input.options), input.correctOptionId, input.difficulty, input.isTiebreaker]
+         difficulty = $6, is_tiebreaker = $7, explanation = $8, updated_at = NOW() WHERE id = $1`,
+      [id, categoryId, input.text, JSON.stringify(input.options), input.correctOptionId, input.difficulty, input.isTiebreaker, input.explanation || null]
     );
     await audit(ctx, "PREGUNTA_EDITADA", "question", id, `Editó la pregunta #${id}`, {
       antes: snapshot(before),
@@ -339,6 +340,7 @@ export async function importQuestions(questions: ImportedQuestion[], actor: stri
     const createdCategories: string[] = [];
     let inserted = 0;
     let skipped = 0;
+    let described = 0;
 
     for (const question of questions) {
       const key = question.category.toLowerCase();
@@ -353,25 +355,31 @@ export async function importQuestions(questions: ImportedQuestion[], actor: stri
         createdCategories.push(question.category);
       }
       const duplicate = await ctx.client.query(
-        "SELECT 1 FROM yamboly_questions WHERE category_id = $1 AND lower(text) = lower($2) LIMIT 1",
+        "SELECT id, explanation FROM yamboly_questions WHERE category_id = $1 AND lower(text) = lower($2) LIMIT 1",
         [categoryId, question.text]
       );
       if (duplicate.rowCount) {
+        // Ya existe: no se duplica, pero si no tenía descripción se completa con la del archivo.
+        const existing = duplicate.rows[0] as { id: number; explanation: string | null };
+        if (question.explanation && !existing.explanation?.trim()) {
+          await ctx.client.query("UPDATE yamboly_questions SET explanation = $2, updated_at = NOW() WHERE id = $1", [existing.id, question.explanation]);
+          described++;
+        }
         skipped++;
         continue;
       }
       await ctx.client.query(
-        `INSERT INTO yamboly_questions (category_id, text, options, correct_option_id, difficulty, is_tiebreaker)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
-        [categoryId, question.text, JSON.stringify(question.options), question.correctOptionId, question.difficulty, question.isTiebreaker]
+        `INSERT INTO yamboly_questions (category_id, text, options, correct_option_id, difficulty, is_tiebreaker, explanation)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [categoryId, question.text, JSON.stringify(question.options), question.correctOptionId, question.difficulty, question.isTiebreaker, question.explanation || null]
       );
       inserted++;
     }
 
     await audit(ctx, "PREGUNTAS_IMPORTADAS", "import", null,
       `Importó ${inserted} pregunta${inserted === 1 ? "" : "s"}${skipped ? ` (${skipped} repetidas omitidas)` : ""}`,
-      { insertadas: inserted, omitidas: skipped, categoriasNuevas: createdCategories });
-    return { inserted, skipped, createdCategories };
+      { insertadas: inserted, omitidas: skipped, descripcionesCompletadas: described, categoriasNuevas: createdCategories });
+    return { inserted, skipped, described, createdCategories };
   });
 }
 

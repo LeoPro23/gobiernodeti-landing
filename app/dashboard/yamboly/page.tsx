@@ -2,7 +2,7 @@ import Link from "next/link"
 import { AlertTriangle, CheckCircle2, Download, Gift, History, ListChecks, Lock, Pencil, Plus, Search, Settings2, Shapes, Upload } from "lucide-react"
 import { requireAdmin } from "@/lib/admin-auth"
 import { getYambolyAdminData, parseQuestionFilters } from "@/lib/yamboly-admin"
-import { DIFFICULTIES, DIFFICULTY_LABELS, IMPORT_TEMPLATE, MAX_ROUNDS, OPTION_IDS } from "@/lib/yamboly-rules"
+import { DIFFICULTIES, DIFFICULTY_LABELS, IMPORT_TEMPLATE, MAX_EXPLANATION_LENGTH, MAX_ROUNDS, OPTION_IDS } from "@/lib/yamboly-rules"
 import { DashboardTabs } from "../dashboard-ui"
 import { ActionForm } from "../action-form"
 
@@ -38,6 +38,7 @@ type Question = {
   active: boolean
   used: boolean
   is_tiebreaker: boolean
+  explanation: string | null
   updated_at: string | null
 }
 
@@ -62,6 +63,7 @@ function QuestionFields({ question, categories }: { question?: Question; categor
     <fieldset className="qa-radios"><legend>Respuesta correcta</legend>
       {OPTION_IDS.map(option => <label key={option}><input type="radio" name="correct" value={option} required defaultChecked={question ? question.correct_option_id === option : option === "A"} /> {option}</label>)}
     </fieldset>
+    <label>Descripción de la respuesta correcta (opcional)<textarea name="explanation" rows={2} maxLength={MAX_EXPLANATION_LENGTH} defaultValue={question?.explanation ?? ""} placeholder="Explica por qué es la respuesta correcta. Se muestra al revelar la respuesta." /></label>
   </>
 }
 
@@ -259,6 +261,7 @@ export default async function YambolyAdminPage({ searchParams }: { searchParams:
               <td className="qa-question">
                 <strong>{question.text}</strong>
                 <ol>{question.options.map(option => <li key={option.id} className={option.id === question.correct_option_id ? "qa-correct" : undefined}>{option.id}. {option.text}</li>)}</ol>
+                {question.explanation ? <p className="qa-explanation">{question.explanation}</p> : null}
               </td>
               <td><span className="qa-dot" style={{ background: question.category_color }} aria-hidden="true" />{question.category_name}{!question.category_active && <small className="qa-muted-tag"> (inactiva)</small>}</td>
               <td className="admin-nowrap">{DIFFICULTY_LABELS[question.difficulty] ?? question.difficulty}{question.is_tiebreaker && <><br /><span className="admin-badge admin-badge-pending">Desempate</span></>}</td>
@@ -274,7 +277,7 @@ export default async function YambolyAdminPage({ searchParams }: { searchParams:
       </section>
 
       <section id="importar" className="admin-panel qa-panel" aria-labelledby="importar-title">
-        <div className="admin-panel-heading"><div><h2 id="importar-title">Importar preguntas (CSV)</h2><p className="admin-muted">Columnas: <code>categoria, dificultad, pregunta, a, b, c, d, correcta, desempate</code>. Acepta coma o punto y coma (Excel). Si una fila tiene errores no se importa nada; las preguntas repetidas se omiten y las categorías nuevas se crean solas.</p></div><Upload size={21} aria-hidden="true" /></div>
+        <div className="admin-panel-heading"><div><h2 id="importar-title">Importar preguntas (CSV)</h2><p className="admin-muted">Columnas: <code>categoria, dificultad, pregunta, a, b, c, d, correcta, desempate, descripcion</code> (la descripción es opcional). Acepta coma o punto y coma (Excel). Si una fila tiene errores no se importa nada; las preguntas repetidas se omiten y las categorías nuevas se crean solas.</p></div><Upload size={21} aria-hidden="true" /></div>
         <ActionForm className="qa-form" resetOnSuccess>
           <input type="hidden" name="intent" value="import" />
           <div className="qa-grid qa-grid-2">

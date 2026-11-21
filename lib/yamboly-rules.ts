@@ -253,7 +253,11 @@ export type QuestionInput = {
   correctOptionId: string;
   difficulty: Difficulty;
   isTiebreaker: boolean;
+  /** Descripción de la respuesta correcta; se muestra al revelarla. Vacía si no se escribe. */
+  explanation: string;
 };
+
+export const MAX_EXPLANATION_LENGTH = 500;
 
 export function validateQuestion(input: {
   text: unknown;
@@ -261,6 +265,7 @@ export function validateQuestion(input: {
   correctOptionId: unknown;
   difficulty: unknown;
   isTiebreaker?: unknown;
+  explanation?: unknown;
 }): Result<QuestionInput> {
   const text = typeof input.text === "string" ? input.text.trim() : "";
   if (text.length < 5) return { ok: false, error: "Escribe el enunciado de la pregunta." };
@@ -290,9 +295,14 @@ export function validateQuestion(input: {
   const difficulty = typeof input.difficulty === "string" ? normalizeDifficulty(input.difficulty) : null;
   if (!difficulty) return { ok: false, error: "Elige una dificultad válida." };
 
+  const explanation = typeof input.explanation === "string" ? input.explanation.replace(/\s+/g, " ").trim() : "";
+  if (explanation.length > MAX_EXPLANATION_LENGTH) {
+    return { ok: false, error: `La descripción de la respuesta no puede superar ${MAX_EXPLANATION_LENGTH} caracteres.` };
+  }
+
   return {
     ok: true,
-    value: { text, options, correctOptionId: correct, difficulty, isTiebreaker: truthy(input.isTiebreaker) },
+    value: { text, options, correctOptionId: correct, difficulty, isTiebreaker: truthy(input.isTiebreaker), explanation },
   };
 }
 
@@ -381,9 +391,9 @@ export function parseCsv(text: string): string[][] {
 }
 
 export const IMPORT_TEMPLATE =
-  "categoria,dificultad,pregunta,a,b,c,d,correcta,desempate\n" +
-  '"Gobierno de TI & COBIT",FACIL,"¿Qué entidad creó COBIT?",IEEE,ISACA,ISO,W3C,B,no\n' +
-  '"Auditoría de Sistemas",DIFICIL,"¿Qué control detecta eventos ya ocurridos?",Preventivo,Detectivo,Correctivo,Disuasivo,B,si\n';
+  "categoria,dificultad,pregunta,a,b,c,d,correcta,desempate,descripcion\n" +
+  '"Gobierno de TI & COBIT",FACIL,"¿Qué entidad creó COBIT?",IEEE,ISACA,ISO,W3C,B,no,"COBIT es el marco de gobierno y gestión de TI publicado por ISACA."\n' +
+  '"Auditoría de Sistemas",DIFICIL,"¿Qué control detecta eventos ya ocurridos?",Preventivo,Detectivo,Correctivo,Disuasivo,B,si,"Los controles detectivos identifican errores o incidentes después de que ocurren."\n';
 
 const MAX_IMPORT_ROWS = 500;
 
@@ -412,6 +422,8 @@ export function parseQuestionImport(text: string): { ok: true; questions: Import
       correctOptionId: cell(cells, "correcta"),
       difficulty: cell(cells, "dificultad"),
       isTiebreaker: cell(cells, "desempate"),
+      // «descripción» o «descripcion» (los encabezados se comparan sin tildes); opcional.
+      explanation: cell(cells, "descripcion"),
     });
     if (!parsed.ok) return errors.push(`Fila ${line}: ${parsed.error}`);
     questions.push({ ...parsed.value, category });

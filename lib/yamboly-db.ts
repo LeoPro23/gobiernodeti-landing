@@ -168,6 +168,9 @@ async function createYambolyTables() {
     );
     CREATE INDEX IF NOT EXISTS idx_yamboly_audit_created ON yamboly_audit_log(created_at DESC);
 
+    -- Descripción de la respuesta correcta, que se muestra al revelarla.
+    ALTER TABLE yamboly_questions ADD COLUMN IF NOT EXISTS explanation TEXT;
+
     -- Inscripción con DNI, vinculada a la inscripción del Fullday si existe.
     ALTER TABLE yamboly_participants
       ADD COLUMN IF NOT EXISTS dni VARCHAR(20),
@@ -467,7 +470,7 @@ export async function getYambolyQuestions() {
 export async function getYambolyCurrentQuestion(questionId: number) {
   await ensureYambolyTables();
   const res = await getPool().query(
-    `SELECT q.id, q.category_id, q.text, q.options, q.difficulty, q.correct_option_id, q.is_tiebreaker,
+    `SELECT q.id, q.category_id, q.text, q.options, q.difficulty, q.correct_option_id, q.is_tiebreaker, q.explanation,
             c.name as category_name, c.color as category_color
      FROM yamboly_questions q
      JOIN yamboly_categories c ON q.category_id = c.id

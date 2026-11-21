@@ -763,6 +763,13 @@ export default function YambolyParticipantPage() {
                   })}
                 </div>
 
+                {currentQuestion.explanation && (
+                  <div className="yb-answer-explanation yb-answer-explanation-mobile" role="note">
+                    <CheckCircle2 size={20} aria-hidden="true" style={{ flexShrink: 0, color: "var(--yb-green)" }} />
+                    <p>{currentQuestion.explanation}</p>
+                  </div>
+                )}
+
                 {/* Score Counter */}
                 <div
                   className="yb-hud-panel"

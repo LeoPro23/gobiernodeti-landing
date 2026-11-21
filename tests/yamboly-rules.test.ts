@@ -143,7 +143,12 @@ describe("validación de preguntas", () => {
   const ok = { text: "¿Qué entidad creó COBIT?", options: ["IEEE", "ISACA", "", ""], correctOptionId: "b", difficulty: "fácil", isTiebreaker: "si" }
 
   it("normaliza dificultad, respuesta y alternativas opcionales", () => {
-    expect(validateQuestion(ok)).toEqual({ ok: true, value: { text: "¿Qué entidad creó COBIT?", options: [{ id: "A", text: "IEEE" }, { id: "B", text: "ISACA" }], correctOptionId: "B", difficulty: "FACIL", isTiebreaker: true } })
+    expect(validateQuestion(ok)).toEqual({ ok: true, value: { text: "¿Qué entidad creó COBIT?", options: [{ id: "A", text: "IEEE" }, { id: "B", text: "ISACA" }], correctOptionId: "B", difficulty: "FACIL", isTiebreaker: true, explanation: "" } })
+  })
+
+  it("acepta una descripción opcional de la respuesta correcta, con límite de largo", () => {
+    expect(validateQuestion({ ...ok, explanation: "  ISACA   publica COBIT. " })).toMatchObject({ ok: true, value: { explanation: "ISACA publica COBIT." } })
+    expect(validateQuestion({ ...ok, explanation: "x".repeat(501) }).ok).toBe(false)
   })
 
   it("rechaza respuestas fuera de las alternativas, huecos y repetidas", () => {
@@ -193,6 +198,13 @@ describe("importación CSV", () => {
         "Fila 5: pregunta repetida en el archivo (igual a la fila 2).",
       ])
     }
+  })
+
+  it("lee la columna «descripción» con o sin tilde, entre comillas y con comas", () => {
+    const csv = 'categoria,dificultad,pregunta,a,b,correcta,desempate,descripción\nPOO,FACIL,¿Qué es una clase?,Una plantilla,Un error,A,no,"Define atributos, métodos y comportamiento."'
+    expect(parseQuestionImport(csv)).toMatchObject({ ok: true, questions: [{ category: "POO", explanation: "Define atributos, métodos y comportamiento." }] })
+    expect(parseQuestionImport(csv.replace("descripción", "descripcion"))).toMatchObject({ ok: true, questions: [{ explanation: "Define atributos, métodos y comportamiento." }] })
+    expect(parseQuestionImport("categoria,dificultad,pregunta,a,b,correcta\nX,FACIL,¿Sin descripción?,1,2,A")).toMatchObject({ ok: true, questions: [{ explanation: "" }] })
   })
 
   it("exige las columnas mínimas", () => {
