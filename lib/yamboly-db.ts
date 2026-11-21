@@ -1,10 +1,13 @@
 import "server-only";
 import type { Pool, PoolClient } from "pg";
-import { getPool } from "./db";
+import { ensureRegistrationTable, getPool } from "./db";
 import { randomBytes } from "node:crypto";
 import { remainingTimeMs } from "./yamboly-timer";
 import {
+  cleanEmail,
+  cleanParticipantName,
   DEFAULT_SETTINGS,
+  normalizeDni,
   rankParticipants,
   relevantTieGroups,
   requiredByDifficulty,
@@ -16,10 +19,18 @@ type Queryable = Pool | PoolClient;
 
 export const SESSION_ID = "fullday";
 
-let yambolyEnsured = false;
+let yambolyEnsured: Promise<void> | null = null;
 
-export async function ensureYambolyTables() {
-  if (yambolyEnsured) return;
+/** Crea o migra las tablas una sola vez por proceso, aunque lleguen varias solicitudes a la vez. */
+export function ensureYambolyTables() {
+  yambolyEnsured ??= createYambolyTables().catch((error) => {
+    yambolyEnsured = null;
+    throw error;
+  });
+  return yambolyEnsured;
+}
+
+async function createYambolyTables() {
   const pool = getPool();
 
   const query = `
@@ -156,8 +167,16 @@ export async function ensureYambolyTables() {
       created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
     );
     CREATE INDEX IF NOT EXISTS idx_yamboly_audit_created ON yamboly_audit_log(created_at DESC);
+
+    -- Inscripción con DNI, vinculada a la inscripción del Fullday si existe.
+    ALTER TABLE yamboly_participants
+      ADD COLUMN IF NOT EXISTS dni VARCHAR(20),
+      ADD COLUMN IF NOT EXISTS registration_id INTEGER;
+    CREATE INDEX IF NOT EXISTS idx_yamboly_participants_dni ON yamboly_participants(session_id, dni);
   `;
 
+  // La inscripción al quiz consulta la tabla de inscritos del Fullday.
+  await ensureRegistrationTable();
   await pool.query(query);
 
   // Seed default session if not exists
@@ -186,8 +205,6 @@ export async function ensureYambolyTables() {
   if (parseInt(catCount.rows[0].count, 10) === 0) {
     await seedInitialQuizData(pool);
   }
-
-  yambolyEnsured = true;
 }
 
 // Initial seed data based on the congress themes
@@ -546,49 +563,117 @@ export async function logYambolyAudit(
   );
 }
 
-export async function registerYambolyParticipant(data: {
-  sessionId?: string;
-  fullName: string;
-  email: string;
-  phone: string;
-}) {
+/** Error con un mensaje pensado para mostrarse tal cual al participante o al administrador. */
+export class YambolyUserError extends Error {}
+
+const ALREADY_REGISTERED_HELP = "Usa el navegador con el que te registraste o consulta a la organización.";
+
+function registrationBlocked(session: YambolySession): string | null {
+  if (!session.is_registration_open && !session.allow_late_entry) return "El registro para esta dinámica ya fue cerrado por el moderador.";
+  if (session.tiebreak_round > 0 || session.status === "TIEBREAK" || session.status === "PODIUM") return "La dinámica ya está en su etapa final.";
+  return null;
+}
+
+function requireDni(value: unknown) {
+  const dni = normalizeDni(value);
+  if (!dni) throw new YambolyUserError("Ingresa un DNI válido de 8 a 12 dígitos.");
+  return dni;
+}
+
+async function assertDniAvailable(db: Queryable, sessionId: string, dni: string) {
+  const existing = await db.query("SELECT 1 FROM yamboly_participants WHERE session_id = $1 AND dni = $2 LIMIT 1", [sessionId, dni]);
+  if (existing.rowCount) throw new YambolyUserError(`Este DNI ya está inscrito en el quiz. ${ALREADY_REGISTERED_HELP}`);
+}
+
+/** Inscripción del Fullday con ese DNI; solo se usa el nombre. */
+async function findFulldayRegistration(db: Queryable, dni: string): Promise<{ id: number; full_name: string } | null> {
+  const res = await db.query(
+    // Las inscripciones hechas desde el panel pueden no tener apellidos.
+    "SELECT id, concat_ws(' ', trim(nombres), NULLIF(trim(apellidos), '')) AS full_name FROM registrations WHERE dni = $1 LIMIT 1",
+    [dni]
+  );
+  return res.rows[0] ?? null;
+}
+
+/** Primer paso del registro: si el DNI está inscrito en el Fullday, devuelve solo el nombre para que la persona lo confirme. */
+export async function lookupYambolyDni(value: unknown, sessionId = SESSION_ID): Promise<{ found: true; fullName: string } | { found: false }> {
   await ensureYambolyTables();
-  const sessionId = data.sessionId || SESSION_ID;
-  // Format and validate
-  const fullName = data.fullName.trim();
-  const email = data.email.trim().toLowerCase();
-  const phone = data.phone.trim();
+  const dni = requireDni(value);
+  const pool = getPool();
+  const session = await getYambolySession(sessionId);
+  if (!session) throw new YambolyUserError("La dinámica no está disponible.");
+  const blocked = registrationBlocked(session);
+  if (blocked) throw new YambolyUserError(blocked);
+  await assertDniAvailable(pool, sessionId, dni);
+  const registration = await findFulldayRegistration(pool, dni);
+  return registration ? { found: true, fullName: registration.full_name } : { found: false };
+}
 
-  if (!fullName || fullName.length < 3) throw new Error("Por favor ingresa tu nombre completo.");
-  if (fullName.length > 200) throw new Error("El nombre es demasiado largo.");
-  if (email.length > 200 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error("Ingresa un correo válido.");
-  if (phone.length > 50 || !/^[+\d\s()-]{6,50}$/.test(phone) || phone.replace(/\D/g, "").length < 6) throw new Error("Ingresa un número de teléfono válido.");
+export type ParticipantInput = { dni: unknown; fullName?: unknown; email?: unknown };
 
-  // Create token
-  const token = randomBytes(32).toString("hex");
+export type InsertedParticipant = {
+  id: number;
+  token: string;
+  full_name: string;
+  dni: string;
+  email: string | null;
+  registration_id: number | null;
+};
 
+/**
+ * Inscribe a un participante dentro de una transacción que ya bloqueó la sesión.
+ * Con DNI del Fullday se usa el nombre de esa inscripción, sin correo; sin él, el nombre
+ * y el correo son obligatorios. Cada DNI y cada correo se inscriben una sola vez.
+ */
+async function insertYambolyParticipant(client: PoolClient, session: YambolySession, input: ParticipantInput): Promise<InsertedParticipant> {
+  const blocked = registrationBlocked(session);
+  if (blocked) throw new YambolyUserError(blocked);
+  const dni = requireDni(input.dni);
+  await assertDniAvailable(client, session.id, dni);
+
+  const registration = await findFulldayRegistration(client, dni);
+  let fullName: string;
+  let email: string | null = null;
+  if (registration) {
+    fullName = registration.full_name.slice(0, 200);
+  } else {
+    const given = (value: unknown) => (typeof value === "string" && value.trim() ? value : null);
+    const name = cleanParticipantName(given(input.fullName));
+    const mail = given(input.email) ? cleanEmail(input.email) : null;
+    if (!name.ok) throw new YambolyUserError(name.error);
+    if (!mail) throw new YambolyUserError("Ingresa un correo.");
+    if (!mail.ok) throw new YambolyUserError(mail.error);
+    fullName = name.value;
+    email = mail.value;
+    const existing = await client.query("SELECT 1 FROM yamboly_participants WHERE session_id = $1 AND lower(email) = $2 LIMIT 1", [session.id, email]);
+    if (existing.rowCount) throw new YambolyUserError(`Este correo ya está inscrito en el quiz. ${ALREADY_REGISTERED_HELP}`);
+  }
+
+  const res = await client.query(
+    `INSERT INTO yamboly_participants (session_id, full_name, email, dni, registration_id, token)
+     VALUES ($1, $2, $3, $4, $5, $6)
+     RETURNING id, token, full_name, dni, email, registration_id`,
+    [session.id, fullName, email, dni, registration?.id ?? null, randomBytes(32).toString("hex")]
+  );
+  return res.rows[0];
+}
+
+export async function registerYambolyParticipant(data: ParticipantInput & { sessionId?: string }) {
+  await ensureYambolyTables();
   const client = await getPool().connect();
   try {
-  await client.query("BEGIN");
-  const session = (await client.query("SELECT * FROM yamboly_sessions WHERE id = $1 FOR UPDATE", [sessionId])).rows[0];
-  if (!session) throw new Error("Sesión no encontrada");
-  if (!session.is_registration_open && !session.allow_late_entry) throw new Error("El registro para esta dinámica ya fue cerrado por el moderador.");
-  if (session.tiebreak_round > 0 || session.status === "TIEBREAK" || session.status === "PODIUM") throw new Error("La dinámica ya está en su etapa final.");
-  const existing = await client.query("SELECT 1 FROM yamboly_participants WHERE session_id = $1 AND lower(email) = $2 LIMIT 1", [sessionId, email]);
-  if (existing.rowCount) throw new Error("Este correo ya está inscrito. Usa el navegador con el que te registraste o consulta a la organización.");
-  const res = await client.query(
-    `INSERT INTO yamboly_participants (session_id, full_name, email, phone, token)
-     VALUES ($1, $2, $3, $4, $5)
-     RETURNING id, token, full_name, email, phone, score, correct_count`,
-    [sessionId, fullName, email, phone, token]
-  );
-
-  await client.query("COMMIT");
-  return res.rows[0];
+    await client.query("BEGIN");
+    const session = (await client.query("SELECT * FROM yamboly_sessions WHERE id = $1 FOR UPDATE", [data.sessionId || SESSION_ID])).rows[0];
+    if (!session) throw new YambolyUserError("La dinámica no está disponible.");
+    const participant = await insertYambolyParticipant(client, session, data);
+    await client.query("COMMIT");
+    return participant;
   } catch (error) {
     await client.query("ROLLBACK");
     throw error;
-  } finally { client.release(); }
+  } finally {
+    client.release();
+  }
 }
 
 export async function getParticipantByToken(token: string) {

@@ -20,6 +20,7 @@ import {
   Scale
 } from "lucide-react";
 import "../yamboly.css";
+import { ParticipantsPanel } from "./participants-panel";
 
 function buildPhases(readingSec: number, answeringSec: number) {
   return [
@@ -656,6 +657,8 @@ export default function YambolyModeratorPage() {
             )}
           </div>
         </div>
+
+        <ParticipantsPanel />
 
         {/* ADVANCED & EMERGENCY RESET */}
         <div className="yb-hud-panel" style={{ padding: "1.25rem 1.5rem" }}>

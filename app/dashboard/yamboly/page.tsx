@@ -4,7 +4,7 @@ import { requireAdmin } from "@/lib/admin-auth"
 import { getYambolyAdminData, parseQuestionFilters } from "@/lib/yamboly-admin"
 import { DIFFICULTIES, DIFFICULTY_LABELS, IMPORT_TEMPLATE, MAX_ROUNDS, OPTION_IDS } from "@/lib/yamboly-rules"
 import { DashboardTabs } from "../dashboard-ui"
-import { ActionForm } from "./action-form"
+import { ActionForm } from "../action-form"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"

@@ -20,9 +20,10 @@ import {
   validatePrize,
   YambolyAdminError,
 } from "@/lib/yamboly-admin"
+import { YambolyUserError } from "@/lib/yamboly-db"
 import { MAX_ROUNDS, OPTION_IDS, parseGameSettings, parseQuestionImport, validateQuestion } from "@/lib/yamboly-rules"
 
-export type AdminFormState = { ok: true; message: string; nonce: number } | { ok: false; error: string; details?: string[] } | null
+import type { AdminFormState } from "../form-state"
 
 const MAX_IMPORT_BYTES = 512 * 1024
 
@@ -144,7 +145,7 @@ export async function yambolyAdminAction(_state: AdminFormState, form: FormData)
         return { ok: false, error: "Acción no reconocida." }
     }
   } catch (error) {
-    if (error instanceof YambolyAdminError) return { ok: false, error: error.message }
+    if (error instanceof YambolyUserError) return { ok: false, error: error.message }
     console.error("Error en la administración del quiz", { intent, code: (error as { code?: string })?.code, error })
     return { ok: false, error: "No se pudo guardar el cambio. Intenta nuevamente." }
   }

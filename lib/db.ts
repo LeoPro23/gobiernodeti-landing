@@ -22,10 +22,18 @@ export function getPool() {
   return localPool;
 }
 
-let tableEnsured = false;
+let tableEnsured: Promise<void> | null = null;
 
-export async function ensureRegistrationTable() {
-  if (tableEnsured) return;
+/** Crea o migra las tablas una sola vez por proceso, aunque lleguen varias solicitudes a la vez. */
+export function ensureRegistrationTable() {
+  tableEnsured ??= createRegistrationTables().catch((error) => {
+    tableEnsured = null;
+    throw error;
+  });
+  return tableEnsured;
+}
+
+async function createRegistrationTables() {
   const query = `
     CREATE TABLE IF NOT EXISTS registrations (
       id SERIAL PRIMARY KEY,
@@ -68,9 +76,14 @@ export async function ensureRegistrationTable() {
     CREATE UNIQUE INDEX IF NOT EXISTS uq_registration_valid_certificate_payment
       ON registration_payment_images(registration_id)
       WHERE status = 'valid';
+
+    -- Asistencia marcada en el panel y origen de la inscripción (formulario web o panel).
+    ALTER TABLE registrations
+      ADD COLUMN IF NOT EXISTS asistio BOOLEAN NOT NULL DEFAULT FALSE,
+      ADD COLUMN IF NOT EXISTS asistio_at TIMESTAMP WITH TIME ZONE,
+      ADD COLUMN IF NOT EXISTS origen VARCHAR(20) NOT NULL DEFAULT 'web';
   `;
   await getPool().query(query);
-  tableEnsured = true;
 }
 
 export interface RegistrationInput {
@@ -86,7 +99,7 @@ export interface RegistrationInput {
   autorizaDatos: boolean;
 }
 
-export async function createRegistration(data: RegistrationInput) {
+export async function createRegistration(data: RegistrationInput, options: { origen?: "web" | "panel"; asistio?: boolean } = {}) {
   await ensureRegistrationTable();
 
   // Verificar si ya existe con ese DNI
@@ -100,9 +113,10 @@ export async function createRegistration(data: RegistrationInput) {
 
   const insertQuery = `
     INSERT INTO registrations (
-      nombres, apellidos, dni, universidad, carrera, ciclo, telefono, ciudad, acepta_terminos, autoriza_datos
+      nombres, apellidos, dni, universidad, carrera, ciclo, telefono, ciudad, acepta_terminos, autoriza_datos,
+      origen, asistio, asistio_at
     ) VALUES (
-      $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
+      $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, CASE WHEN $12 THEN NOW() END
     ) RETURNING id, nombres, apellidos, dni, created_at;
   `;
   const values = [
@@ -116,6 +130,8 @@ export async function createRegistration(data: RegistrationInput) {
     data.ciudad?.trim() || null,
     data.aceptaTerminos,
     data.autorizaDatos,
+    options.origen ?? "web",
+    Boolean(options.asistio),
   ];
 
   const result = await getPool().query(insertQuery, values);

@@ -311,6 +311,28 @@ function truthy(value: unknown) {
   return ["si", "sí", "s", "true", "1", "x", "on", "yes"].includes(value.trim().toLowerCase());
 }
 
+// ----------------- Inscripción de participantes -----------------
+
+/** DNI peruano o carné de extranjería: solo dígitos, como en la inscripción del Fullday. */
+export function normalizeDni(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const dni = value.trim();
+  return /^\d{8,12}$/.test(dni) ? dni : null;
+}
+
+export function cleanParticipantName(value: unknown): Result<string> {
+  const name = typeof value === "string" ? value.replace(/\s+/g, " ").trim() : "";
+  if (name.length < 3) return { ok: false, error: "Ingresa nombres y apellidos." };
+  if (name.length > 200) return { ok: false, error: "El nombre no puede superar 200 caracteres." };
+  return { ok: true, value: name };
+}
+
+export function cleanEmail(value: unknown): Result<string> {
+  const email = typeof value === "string" ? value.trim().toLowerCase() : "";
+  if (email.length > 200 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { ok: false, error: "Ingresa un correo válido." };
+  return { ok: true, value: email };
+}
+
 // ----------------- Importación CSV -----------------
 
 export type ImportedQuestion = QuestionInput & { category: string };
