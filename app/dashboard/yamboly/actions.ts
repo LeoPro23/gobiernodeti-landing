@@ -75,6 +75,7 @@ export async function yambolyAdminAction(_state: AdminFormState, form: FormData)
           answeringDurationSec: form.get("answeringDurationSec"),
           pointsPerCorrect: form.get("pointsPerCorrect"),
           tieThresholdMs: form.get("tieThresholdMs"),
+          maxTiebreakQuestions: form.get("maxTiebreakQuestions"),
           difficultySequence: Array.from({ length: MAX_ROUNDS }, (_, i) => form.get(`round${i}`)),
           allowLateEntry: form.get("allowLateEntry"),
         })

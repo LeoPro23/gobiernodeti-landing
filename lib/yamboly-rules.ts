@@ -16,6 +16,7 @@ export const DEFAULT_SETTINGS = {
   answeringDurationSec: 20,
   pointsPerCorrect: 4,
   tieThresholdMs: 1000,
+  maxTiebreakQuestions: 3,
   difficultySequence: ["FACIL", "INTERMEDIA", "INTERMEDIA", "DIFICIL", "DIFICIL"] as Difficulty[],
   allowLateEntry: false,
 };
@@ -165,6 +166,17 @@ export function relevantTieGroups(tieGroups: TieGroup[], prizePlaces: number) {
   return tieGroups.filter((group) => group.fromPosition <= prizePlaces);
 }
 
+/** El sorteo externo solo incluye al grupo que sigue empatado en el primer puesto. */
+export function tiebreakOutcome(tieGroups: TieGroup[], prizePlaces: number, round: number, maxQuestions: number) {
+  const relevantTies = relevantTieGroups(tieGroups, prizePlaces);
+  const limitReached = round >= maxQuestions;
+  return {
+    relevantTies,
+    limitReached,
+    drawGroup: limitReached && prizePlaces > 0 ? relevantTies.find((group) => group.fromPosition === 1) ?? null : null,
+  };
+}
+
 // ----------------- Parámetros de partida -----------------
 
 export type GameSettings = typeof DEFAULT_SETTINGS;
@@ -188,6 +200,7 @@ export function parseGameSettings(input: {
   answeringDurationSec: unknown;
   pointsPerCorrect: unknown;
   tieThresholdMs: unknown;
+  maxTiebreakQuestions?: unknown;
   difficultySequence: unknown[];
   allowLateEntry: unknown;
 }): Result<GameSettings> {
@@ -199,6 +212,8 @@ export function parseGameSettings(input: {
   if (!points.ok) return points;
   const threshold = integerInRange(input.tieThresholdMs, "El umbral de empate técnico", 0, 10000);
   if (!threshold.ok) return threshold;
+  const maxTiebreak = integerInRange(input.maxTiebreakQuestions ?? DEFAULT_SETTINGS.maxTiebreakQuestions, "La cantidad de preguntas de desempate", 1, 20);
+  if (!maxTiebreak.ok) return maxTiebreak;
 
   const sequence = input.difficultySequence
     .map((value) => (typeof value === "string" ? value.trim() : ""))
@@ -214,6 +229,7 @@ export function parseGameSettings(input: {
       answeringDurationSec: answering.value,
       pointsPerCorrect: points.value,
       tieThresholdMs: threshold.value,
+      maxTiebreakQuestions: maxTiebreak.value,
       difficultySequence: sequence,
       allowLateEntry: input.allowLateEntry === true || input.allowLateEntry === "on" || input.allowLateEntry === "true",
     },

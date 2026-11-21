@@ -5,6 +5,7 @@ import {
   parseQuestionImport,
   rankParticipants,
   relevantTieGroups,
+  tiebreakOutcome,
   requiredByDifficulty,
   validateQuestion,
   type RankInput,
@@ -102,7 +103,7 @@ describe("parámetros de partida", () => {
 
   it("acepta valores válidos e ignora rondas vacías", () => {
     const parsed = parseGameSettings(base)
-    expect(parsed).toEqual({ ok: true, value: { readingDurationSec: 8, answeringDurationSec: 20, pointsPerCorrect: 4, tieThresholdMs: 1000, difficultySequence: ["FACIL", "DIFICIL"], allowLateEntry: false } })
+    expect(parsed).toEqual({ ok: true, value: { readingDurationSec: 8, answeringDurationSec: 20, pointsPerCorrect: 4, tieThresholdMs: 1000, maxTiebreakQuestions: 3, difficultySequence: ["FACIL", "DIFICIL"], allowLateEntry: false } })
   })
 
   it("rechaza tiempos fuera de rango, decimales y dificultades desconocidas", () => {
@@ -110,10 +111,28 @@ describe("parámetros de partida", () => {
     expect(parseGameSettings({ ...base, answeringDurationSec: "20.5" }).ok).toBe(false)
     expect(parseGameSettings({ ...base, difficultySequence: ["EXTREMA"] }).ok).toBe(false)
     expect(parseGameSettings({ ...base, difficultySequence: [] }).ok).toBe(false)
+    expect(parseGameSettings({ ...base, maxTiebreakQuestions: 0 }).ok).toBe(false)
+    expect(parseGameSettings({ ...base, maxTiebreakQuestions: 21 }).ok).toBe(false)
   })
 
   it("cuenta las preguntas necesarias por dificultad", () => {
     expect(requiredByDifficulty(["FACIL", "INTERMEDIA", "INTERMEDIA", "DIFICIL", "DIFICIL"])).toEqual({ FACIL: 1, INTERMEDIA: 2, DIFICIL: 2 })
+  })
+})
+
+describe("límite y sorteo del primer puesto", () => {
+  it("ofrece el sorteo solo al alcanzar el límite con empate por el primer puesto", () => {
+    const { tieGroups } = rankParticipants([player(1, 20, 1000), player(2, 20, 1500), player(3, 8, 1000)], [], 1000)
+    expect(tiebreakOutcome(tieGroups, 1, 2, 3).drawGroup).toBeNull()
+    expect(tiebreakOutcome(tieGroups, 1, 3, 3).drawGroup?.memberIds).toEqual([1, 2])
+    expect(tiebreakOutcome(tieGroups, 0, 3, 3).drawGroup).toBeNull()
+  })
+
+  it("no incluye a participantes que ya quedaron por detrás tras un desempate", () => {
+    const rows = [player(1, 20, 1000), player(2, 20, 1200), player(3, 20, 1300)]
+    const tb = round(1, [1, 2, 3], { 1: [true, 1000], 2: [true, 1200], 3: [false, 500] })
+    const { tieGroups } = rankParticipants(rows, [tb], 1000)
+    expect(tiebreakOutcome(tieGroups, 1, 3, 3).drawGroup?.memberIds).toEqual([1, 2])
   })
 })
 

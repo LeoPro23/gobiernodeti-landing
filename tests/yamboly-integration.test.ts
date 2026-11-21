@@ -17,6 +17,8 @@ describe.skipIf(!url)("Yámboly contra PostgreSQL", () => {
 
   const act = (type: Parameters<typeof db.executeModeratorAction>[0]["type"]) => db.executeModeratorAction({ type }, "test@fullday")
   const session = async () => (await db.getYambolySession())!
+  const finishReading = () => pool.query("UPDATE yamboly_sessions SET reading_start_time = clock_timestamp() - (reading_duration_sec * interval '1 second') WHERE id = 'fullday'")
+  const finishAnswering = () => pool.query("UPDATE yamboly_sessions SET answering_start_time = clock_timestamp() - (answering_duration_sec * interval '1 second') WHERE id = 'fullday'")
   const correctOption = async () => {
     const current = await session()
     const row = (await pool.query("SELECT correct_option_id, options FROM yamboly_questions WHERE id = $1", [current.current_question_id])).rows[0]
@@ -42,7 +44,7 @@ describe.skipIf(!url)("Yámboly contra PostgreSQL", () => {
   afterAll(async () => { await pool?.end() })
 
   it("prepara la partida: parámetros, pregunta de desempate y participantes", async () => {
-    await admin.updateGameSettings({ readingDurationSec: 8, answeringDurationSec: 20, pointsPerCorrect: 5, tieThresholdMs: 1000, difficultySequence: ["FACIL", "INTERMEDIA", "DIFICIL"], allowLateEntry: false }, "test@fullday")
+    await admin.updateGameSettings({ readingDurationSec: 8, answeringDurationSec: 20, pointsPerCorrect: 5, tieThresholdMs: 1000, maxTiebreakQuestions: 3, difficultySequence: ["FACIL", "INTERMEDIA", "DIFICIL"], allowLateEntry: false }, "test@fullday")
     const categoryId = (await db.getYambolyCategories())[0].id
     await admin.createQuestion(categoryId, { text: "¿Pregunta de desempate?", options: [{ id: "A", text: "Sí" }, { id: "B", text: "No" }], correctOptionId: "A", difficulty: "DIFICIL", isTiebreaker: true }, "test@fullday")
     for (const name of ["Ana", "Beto", "Caro", "Dani"]) {
@@ -58,12 +60,32 @@ describe.skipIf(!url)("Yámboly contra PostgreSQL", () => {
       await act("SPIN_ROULETTE")
       const q = await correctOption()
       expect((await pool.query("SELECT is_tiebreaker FROM yamboly_questions WHERE id = $1", [q.questionId])).rows[0].is_tiebreaker).toBe(false)
+      await expect(act("START_READING")).rejects.toThrow("no permitida")
+      await act("SHOW_QUESTION")
+      expect(await session()).toMatchObject({ status: "QUESTION_READY", reading_start_time: null })
+      await expect(answer(0, q.questionId, q.correct)).rejects.toThrow("no está activo")
       await act("START_READING")
+      await expect(act("START_ANSWERING")).rejects.toThrow("lectura aún no ha terminado")
+      if (roundIndex === 0) {
+        await act("PAUSE")
+        await expect(act("START_ANSWERING")).rejects.toThrow("Reanuda")
+        await act("RESUME")
+      }
+      await finishReading()
       await act("START_ANSWERING")
       // Ana y Beto aciertan casi al mismo tiempo; Caro falla; Dani no responde.
       await answer(0, q.questionId, q.correct)
       await answer(1, q.questionId, q.correct)
       await answer(2, q.questionId, q.wrong)
+      if (roundIndex === 0) {
+        await act("PAUSE")
+        await expect(answer(3, q.questionId, q.correct)).rejects.toThrow("pausada")
+        await act("RESUME")
+        expect((await pool.query("SELECT COUNT(*)::int AS n FROM yamboly_answers WHERE question_id = $1", [q.questionId])).rows[0].n).toBe(3)
+      }
+      await expect(act("REVEAL_ANSWER")).rejects.toThrow("votación aún no ha terminado")
+      await finishAnswering()
+      await expect(answer(3, q.questionId, q.correct)).rejects.toThrow("tiempo de respuesta ha terminado")
       await act("REVEAL_ANSWER")
       await act("SHOW_ROUND_RANKING")
     }
@@ -72,7 +94,7 @@ describe.skipIf(!url)("Yámboly contra PostgreSQL", () => {
   })
 
   it("bloquea reglas y preguntas jugadas una vez iniciada la partida", async () => {
-    await expect(admin.updateGameSettings({ readingDurationSec: 5, answeringDurationSec: 20, pointsPerCorrect: 5, tieThresholdMs: 1000, difficultySequence: ["FACIL"], allowLateEntry: false }, "x")).rejects.toThrow("bloqueadas")
+    await expect(admin.updateGameSettings({ readingDurationSec: 5, answeringDurationSec: 20, pointsPerCorrect: 5, tieThresholdMs: 1000, maxTiebreakQuestions: 3, difficultySequence: ["FACIL"], allowLateEntry: false }, "x")).rejects.toThrow("bloqueadas")
     const played = (await pool.query("SELECT id FROM yamboly_questions WHERE used = TRUE LIMIT 1")).rows[0].id
     await expect(admin.setQuestionActive(played, false, "x")).rejects.toThrow("ya se jugó")
     await expect(admin.deleteLastPrize("x")).rejects.toThrow("ya comenzó")
@@ -94,11 +116,14 @@ describe.skipIf(!url)("Yámboly contra PostgreSQL", () => {
     await act("START_TIEBREAK_QUESTION")
     const q = await correctOption()
     expect((await pool.query("SELECT is_tiebreaker FROM yamboly_questions WHERE id = $1", [q.questionId])).rows[0].is_tiebreaker).toBe(true)
+    expect(await session()).toMatchObject({ status: "QUESTION_READY", reading_start_time: null })
+    await act("START_READING"); await finishReading()
     await act("START_ANSWERING")
     await answer(1, q.questionId, q.correct) // Beto acierta
     await answer(0, q.questionId, q.wrong) // Ana falla
     await answer(2, q.questionId, q.correct) // Caro acierta; Dani no responde
     await expect(answer(1, q.questionId, q.correct)).rejects.toThrow("Ya enviaste")
+    await finishAnswering()
     await act("REVEAL_ANSWER")
     await act("SHOW_ROUND_RANKING")
 
@@ -120,13 +145,13 @@ describe.skipIf(!url)("Yámboly contra PostgreSQL", () => {
     // Partida de una sola ronda donde solo Ana y Beto empatan arriba.
     await pool.query("UPDATE yamboly_sessions SET difficulty_sequence = ARRAY['FACIL'], total_rounds = 1")
     await pool.query("DELETE FROM yamboly_prizes WHERE place > 1")
-    await act("SPIN_ROULETTE"); await act("START_READING"); await act("START_ANSWERING")
+    await act("SPIN_ROULETTE"); await act("SHOW_QUESTION"); await act("START_READING"); await finishReading(); await act("START_ANSWERING")
     const q = await correctOption()
     await answer(0, q.questionId, q.correct)
     await answer(1, q.questionId, q.correct)
-    await act("REVEAL_ANSWER"); await act("SHOW_ROUND_RANKING"); await act("PREPARE_TIEBREAK")
+    await finishAnswering(); await act("REVEAL_ANSWER"); await act("SHOW_ROUND_RANKING"); await act("PREPARE_TIEBREAK")
     expect((await session()).tiebreak_participant_ids.sort()).toEqual([players[0].id, players[1].id].sort())
-    await act("START_TIEBREAK_QUESTION"); await act("START_ANSWERING")
+    await act("START_TIEBREAK_QUESTION"); await act("START_READING"); await finishReading(); await act("START_ANSWERING")
     const tb = await correctOption()
     await expect(answer(3, tb.questionId, tb.correct)).rejects.toThrow("solo para los participantes empatados")
   })
@@ -134,5 +159,23 @@ describe.skipIf(!url)("Yámboly contra PostgreSQL", () => {
   it("registra el historial de cambios y acciones", async () => {
     const actions = (await pool.query("SELECT action FROM yamboly_audit_log")).rows.map(r => r.action)
     expect(actions).toEqual(expect.arrayContaining(["PARAMETROS_ACTUALIZADOS", "PREGUNTA_CREADA", "PREMIO_EDITADO", "MODERADOR_PREPARE_TIEBREAK", "MODERADOR_RESET_GAME"]))
+  })
+
+  it("detiene el desempate en el límite y conserva el grupo empatado para sorteo", async () => {
+    for (let roundIndex = 1; roundIndex <= 3; roundIndex++) {
+      const q = await correctOption()
+      await answer(0, q.questionId, q.wrong)
+      await answer(1, q.questionId, q.wrong)
+      await finishAnswering(); await act("REVEAL_ANSWER"); await act("SHOW_ROUND_RANKING")
+      if (roundIndex < 3) {
+        await act("PREPARE_TIEBREAK"); await act("START_TIEBREAK_QUESTION"); await act("START_READING"); await finishReading(); await act("START_ANSWERING")
+      }
+    }
+    const result = await db.getYambolyRanking()
+    expect(result.relevantTies[0].memberIds.sort()).toEqual([players[0].id, players[1].id].sort())
+    await expect(act("PREPARE_TIEBREAK")).rejects.toThrow("límite")
+    await expect(act("SHOW_PODIUM")).rejects.toThrow("empate técnico")
+    await act("RESET_GAME")
+    expect((await session()).status).toBe("WAITING_REGISTRATION")
   })
 })

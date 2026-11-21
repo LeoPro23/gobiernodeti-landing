@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Clock, CheckCircle2, Award, Scale } from "lucide-react";
 import "./yamboly.css";
 
@@ -16,6 +16,7 @@ export default function YambolyParticipantPage() {
   const [isSendingAnswer, setIsSendingAnswer] = useState(false);
   const [timerRemaining, setTimerRemaining] = useState<number>(0);
   const [timerTotal, setTimerTotal] = useState<number>(1);
+  const clockOffset = useRef(0);
 
   // Poll state every 1 second for snappy mobile responsiveness
   useEffect(() => {
@@ -26,10 +27,11 @@ export default function YambolyParticipantPage() {
         if (!res.ok) return;
         const json = await res.json();
         if (isMounted) {
+          clockOffset.current = Date.parse(json.serverTime) - Date.now();
           setData(json);
 
           // Reset selection on new question / reading phase
-          if (json.session?.status === "QUESTION_READING") {
+          if (json.session?.status === "QUESTION_READY") {
             setSelectedOption(null);
           }
         }
@@ -64,11 +66,13 @@ export default function YambolyParticipantPage() {
 
     if (start && duration) {
       setTimerTotal(duration / 1000);
-      const timerInt = setInterval(() => {
-        const elapsed = (session.paused_at ? new Date(session.paused_at).getTime() : Date.now()) - start;
+      const tick = () => {
+        const elapsed = (session.paused_at ? new Date(session.paused_at).getTime() : Date.now() + clockOffset.current) - start;
         const left = Math.max(0, Math.ceil((duration - elapsed) / 1000));
         setTimerRemaining(left);
-      }, 250);
+      };
+      tick();
+      const timerInt = setInterval(tick, 250);
       return () => clearInterval(timerInt);
     } else {
       setTimerRemaining(0);
@@ -148,7 +152,7 @@ export default function YambolyParticipantPage() {
   const tiebreakContenders: { id: number; full_name: string }[] = data?.tiebreak?.contenders ?? [];
   // Durante el desempate, quien no está empatado solo observa.
   const spectatingTiebreak =
-    inTiebreak && !isContender && ["QUESTION_READING", "QUESTION_ANSWERING", "QUESTION_REVEAL"].includes(session?.status);
+    inTiebreak && !isContender && ["QUESTION_READY", "QUESTION_READING", "QUESTION_ANSWERING", "QUESTION_REVEAL"].includes(session?.status);
 
   return (
     <div className="yb-root">
@@ -354,7 +358,7 @@ export default function YambolyParticipantPage() {
             )}
 
             {/* QUESTION READING WITH VISIBLE COUNTDOWN (LOCKED) */}
-            {session?.status === "QUESTION_READING" && currentQuestion && !spectatingTiebreak && (
+            {["QUESTION_READY", "QUESTION_READING"].includes(session?.status) && currentQuestion && !spectatingTiebreak && (
               <div className="yb-hud-panel" style={{ padding: "1.75rem 1.25rem", margin: "auto 0" }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1rem" }}>
                   <span
@@ -387,11 +391,11 @@ export default function YambolyParticipantPage() {
                     }}
                   >
                     <Clock size={16} />
-                    {timerRemaining}s
+                    {session.status === "QUESTION_READY" ? "Lectura pendiente" : session.paused_at ? `Pausado · ${timerRemaining}s` : `${timerRemaining}s`}
                   </div>
                 </div>
 
-                <div className="yb-timer-bar-wrap" style={{ height: "10px", marginBottom: "1.25rem" }}>
+                {session.status === "QUESTION_READING" && <div className="yb-timer-bar-wrap" style={{ height: "10px", marginBottom: "1.25rem" }}>
                   <div
                     className="yb-timer-bar-fill"
                     style={{
@@ -399,7 +403,7 @@ export default function YambolyParticipantPage() {
                       backgroundColor: "var(--yb-purple)",
                     }}
                   />
-                </div>
+                </div>}
 
                 <h3 style={{ fontSize: "1.25rem", fontWeight: 800, marginBottom: "1.25rem", lineHeight: 1.35 }}>
                   {currentQuestion.text}
@@ -426,7 +430,7 @@ export default function YambolyParticipantPage() {
                 </div>
 
                 <div style={{ textAlign: "center", marginTop: "1.25rem", fontSize: "0.85rem", color: "#94a3b8" }}>
-                  ¡Analiza bien las alternativas! Los botones se desbloquearán en <strong>{timerRemaining}s</strong>.
+                  {session.paused_at ? "Partida pausada." : session.status === "QUESTION_READY" ? "Espera a que el moderador inicie el tiempo de lectura." : timerRemaining > 0 ? "Analiza las alternativas; la votación comenzará cuando indique el moderador." : "Lectura terminada. Espera a que el moderador inicie la votación."}
                 </div>
               </div>
             )}
@@ -463,7 +467,7 @@ export default function YambolyParticipantPage() {
                     }}
                   >
                     <Clock size={18} />
-                    {timerRemaining}s
+                    {session.paused_at ? `Pausado · ${timerRemaining}s` : `${timerRemaining}s`}
                   </div>
                 </div>
 
@@ -491,9 +495,11 @@ export default function YambolyParticipantPage() {
                       ¡Respuesta {selectedOption || participantAnswer?.selected_option_id} Enviada!
                     </h3>
                     <p style={{ color: "#94a3b8", fontSize: "0.9rem", marginTop: "0.5rem" }}>
-                      Tu voto está bloqueado. En <strong>{timerRemaining}s</strong> se revelará si acertaste en verde o rojo.
+                      Tu respuesta fue registrada. Espera a que el moderador revele el resultado.
                     </p>
                   </div>
+                ) : timerRemaining <= 0 && !session.paused_at ? (
+                  <p className="yb-hud-panel" style={{ padding: "1.25rem", textAlign: "center" }}>La votación terminó. Espera la revelación de la respuesta.</p>
                 ) : (
                   <div style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}>
                     {currentQuestion.options?.map((opt: any) => (
@@ -673,7 +679,7 @@ export default function YambolyParticipantPage() {
 
                 <p style={{ color: "#94a3b8", fontSize: "0.95rem" }}>
                   {participant.tied && session.current_round >= session.total_rounds && participant.rank <= prizePlaces
-                    ? "⚖️ Estás en un empate técnico por un puesto premiado. Atento al celular: puede haber una pregunta de desempate."
+                    ? data?.tiebreak?.drawPending ? "⚖️ El empate por el primer puesto se definirá mediante un sorteo externo." : "⚖️ Estás en un empate técnico por un puesto premiado. Atento al celular: puede haber una pregunta de desempate."
                     : session.status === "PODIUM" && participant.rank && participant.rank <= prizePlaces
                     ? "🎉 ¡Estás en el Podio de Premios Yámboly! Acércate a la mesa de premiación."
                     : session.status !== "PODIUM" && participant.rank && participant.rank <= prizePlaces

@@ -2,6 +2,7 @@ import "server-only";
 import type { Pool, PoolClient } from "pg";
 import { getPool } from "./db";
 import { randomBytes } from "node:crypto";
+import { remainingTimeMs } from "./yamboly-timer";
 import {
   DEFAULT_SETTINGS,
   rankParticipants,
@@ -105,6 +106,7 @@ export async function ensureYambolyTables() {
     ALTER TABLE yamboly_sessions
       ADD COLUMN IF NOT EXISTS points_per_correct INTEGER NOT NULL DEFAULT 4,
       ADD COLUMN IF NOT EXISTS tie_threshold_ms INTEGER NOT NULL DEFAULT 1000,
+      ADD COLUMN IF NOT EXISTS max_tiebreak_questions INTEGER NOT NULL DEFAULT 3,
       ADD COLUMN IF NOT EXISTS difficulty_sequence TEXT[] NOT NULL DEFAULT ARRAY['FACIL','INTERMEDIA','INTERMEDIA','DIFICIL','DIFICIL'],
       ADD COLUMN IF NOT EXISTS tiebreak_round INTEGER NOT NULL DEFAULT 0,
       ADD COLUMN IF NOT EXISTS tiebreak_participant_ids INTEGER[] NOT NULL DEFAULT '{}';
@@ -387,6 +389,7 @@ export type YambolySession = {
   paused_at: string | null;
   points_per_correct: number;
   tie_threshold_ms: number;
+  max_tiebreak_questions: number;
   difficulty_sequence: string[];
   tiebreak_round: number;
   tiebreak_participant_ids: number[];
@@ -723,6 +726,7 @@ export type ModeratorActionType =
   | "OPEN_REGISTRATION"
   | "CLOSE_REGISTRATION"
   | "SPIN_ROULETTE"
+  | "SHOW_QUESTION"
   | "START_READING"
   | "START_ANSWERING"
   | "REVEAL_ANSWER"
@@ -738,7 +742,8 @@ const ACTION_SUMMARIES: Record<ModeratorActionType, string> = {
   OPEN_REGISTRATION: "Abrió la inscripción",
   CLOSE_REGISTRATION: "Cerró la inscripción",
   SPIN_ROULETTE: "Giró la ruleta",
-  START_READING: "Mostró la pregunta (lectura)",
+  SHOW_QUESTION: "Mostró la pregunta",
+  START_READING: "Inició el tiempo de lectura",
   START_ANSWERING: "Habilitó las respuestas",
   REVEAL_ANSWER: "Reveló la respuesta correcta",
   SHOW_ROUND_RANKING: "Mostró la clasificación",
@@ -750,20 +755,21 @@ const ACTION_SUMMARIES: Record<ModeratorActionType, string> = {
   RESUME: "Reanudó la partida",
 };
 
-const ACTIVE_STAGES = ["ROULETTE", "QUESTION_READING", "QUESTION_ANSWERING", "QUESTION_REVEAL", "ROUND_RANKING", "TIEBREAK"];
+const ACTIVE_STAGES = ["ROULETTE", "QUESTION_READY", "QUESTION_READING", "QUESTION_ANSWERING", "QUESTION_REVEAL", "ROUND_RANKING", "TIEBREAK"];
 
 const ALLOWED_STAGES: Record<ModeratorActionType, string[]> = {
   OPEN_REGISTRATION: ["WAITING_REGISTRATION"],
   CLOSE_REGISTRATION: ["WAITING_REGISTRATION"],
   SPIN_ROULETTE: ["WAITING_REGISTRATION", "ROUND_RANKING"],
-  START_READING: ["ROULETTE"],
+  SHOW_QUESTION: ["ROULETTE"],
+  START_READING: ["QUESTION_READY"],
   START_ANSWERING: ["QUESTION_READING"],
   REVEAL_ANSWER: ["QUESTION_ANSWERING"],
   SHOW_ROUND_RANKING: ["QUESTION_REVEAL"],
   SHOW_PODIUM: ["ROUND_RANKING"],
   PREPARE_TIEBREAK: ["ROUND_RANKING"],
   START_TIEBREAK_QUESTION: ["TIEBREAK"],
-  RESET_GAME: ["WAITING_REGISTRATION", "PODIUM"],
+  RESET_GAME: ["WAITING_REGISTRATION", "PODIUM", "ROUND_RANKING"],
   PAUSE: ACTIVE_STAGES,
   RESUME: ACTIVE_STAGES,
 };
@@ -788,6 +794,12 @@ export async function executeModeratorAction(action: {
   const finished = session.current_round >= session.total_rounds;
   if (action.type === "SPIN_ROULETTE" && (finished || session.tiebreak_round > 0)) throw new Error("La partida ya completó sus rondas.");
   if ((action.type === "SHOW_PODIUM" || action.type === "PREPARE_TIEBREAK") && !finished) throw new Error("Aún quedan rondas por jugar.");
+  if (action.type === "START_ANSWERING" && remainingTimeMs(session.reading_start_time, session.reading_duration_sec, Date.now()) !== 0) {
+    throw new Error("El tiempo de lectura aún no ha terminado.");
+  }
+  if (action.type === "REVEAL_ANSWER" && remainingTimeMs(session.answering_start_time, session.answering_duration_sec, Date.now()) !== 0) {
+    throw new Error("El tiempo de votación aún no ha terminado.");
+  }
   let summary = ACTION_SUMMARIES[action.type];
 
   switch (action.type) {
@@ -875,11 +887,17 @@ export async function executeModeratorAction(action: {
              total_rounds = $5,
              current_category_id = $2,
              current_question_id = $3,
+             reading_start_time = NULL,
+             answering_start_time = NULL,
              is_registration_open = FALSE,
              updated_at = NOW()
          WHERE id = $4`,
         [nextRound, chosenCatId, questionId, sessionId, sequence.length]
       );
+      break;
+    }
+    case "SHOW_QUESTION": {
+      await pool.query("UPDATE yamboly_sessions SET status = 'QUESTION_READY', reading_start_time = NULL, answering_start_time = NULL, updated_at = NOW() WHERE id = $1", [sessionId]);
       break;
     }
     case "START_READING": {
@@ -945,6 +963,7 @@ export async function executeModeratorAction(action: {
       break;
     }
     case "PREPARE_TIEBREAK": {
+      if (session.tiebreak_round >= session.max_tiebreak_questions) throw new Error("Se alcanzó el límite de preguntas de desempate.");
       const { relevantTies } = await getYambolyRanking(sessionId, pool);
       if (!relevantTies.length) throw new Error("No hay empates técnicos que afecten puestos premiados.");
       const contenders = relevantTies.flatMap((group) => group.memberIds);
@@ -966,6 +985,7 @@ export async function executeModeratorAction(action: {
       break;
     }
     case "START_TIEBREAK_QUESTION": {
+      if (session.tiebreak_round >= session.max_tiebreak_questions) throw new Error("Se alcanzó el límite de preguntas de desempate.");
       if (!session.tiebreak_participant_ids.length) throw new Error("No hay participantes en desempate.");
       // Preferimos el banco exclusivo de desempate; si se agotó, cualquier pregunta publicada sin usar.
       const qRes = await pool.query(
@@ -983,11 +1003,11 @@ export async function executeModeratorAction(action: {
       );
       await pool.query(
         `UPDATE yamboly_sessions
-         SET status = 'QUESTION_READING',
+         SET status = 'QUESTION_READY',
              tiebreak_round = $2,
              current_question_id = $3,
              current_category_id = $4,
-             reading_start_time = NOW(),
+             reading_start_time = NULL,
              answering_start_time = NULL,
              updated_at = NOW()
          WHERE id = $1`,
@@ -997,6 +1017,12 @@ export async function executeModeratorAction(action: {
       break;
     }
     case "RESET_GAME": {
+      if (session.status === "ROUND_RANKING") {
+        const { relevantTies } = await getYambolyRanking(sessionId, pool);
+        if (session.current_round < session.total_rounds || session.tiebreak_round < session.max_tiebreak_questions || !relevantTies.length) {
+          throw new Error("El reinicio solo está disponible en el lobby, el podio o tras alcanzar el límite con empate pendiente.");
+        }
+      }
       await pool.query("DELETE FROM yamboly_tiebreak_answers WHERE session_id = $1", [sessionId]);
       await pool.query("DELETE FROM yamboly_tiebreak_rounds WHERE session_id = $1", [sessionId]);
       await pool.query(

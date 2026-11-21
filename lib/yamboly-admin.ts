@@ -155,7 +155,7 @@ export async function updateGameSettings(settings: GameSettings, actor: string) 
     await ctx.client.query(
       `UPDATE yamboly_sessions SET
          reading_duration_sec = $2, answering_duration_sec = $3, points_per_correct = $4,
-         tie_threshold_ms = $5, difficulty_sequence = $6, total_rounds = $7, allow_late_entry = $8, updated_at = NOW()
+         tie_threshold_ms = $5, difficulty_sequence = $6, total_rounds = $7, allow_late_entry = $8, max_tiebreak_questions = $9, updated_at = NOW()
        WHERE id = $1`,
       [
         SESSION_ID,
@@ -166,6 +166,7 @@ export async function updateGameSettings(settings: GameSettings, actor: string) 
         settings.difficultySequence,
         settings.difficultySequence.length,
         settings.allowLateEntry,
+        settings.maxTiebreakQuestions,
       ]
     );
     const before = {
@@ -173,6 +174,7 @@ export async function updateGameSettings(settings: GameSettings, actor: string) 
       answeringDurationSec: ctx.session.answering_duration_sec,
       pointsPerCorrect: ctx.session.points_per_correct,
       tieThresholdMs: ctx.session.tie_threshold_ms,
+      maxTiebreakQuestions: ctx.session.max_tiebreak_questions,
       difficultySequence: ctx.session.difficulty_sequence,
       allowLateEntry: ctx.session.allow_late_entry,
     };
@@ -222,7 +224,7 @@ export async function updateCategory(id: number, input: CategoryInput, actor: st
 export async function setCategoryActive(id: number, active: boolean, actor: string) {
   return withSession(actor, async (ctx) => {
     const category = await lockedCategory(ctx, id);
-    if (ctx.session.current_category_id === id && !active && ["ROULETTE", "QUESTION_READING", "QUESTION_ANSWERING"].includes(ctx.session.status)) {
+    if (ctx.session.current_category_id === id && !active && ["ROULETTE", "QUESTION_READY", "QUESTION_READING", "QUESTION_ANSWERING"].includes(ctx.session.status)) {
       throw new YambolyAdminError("La categoría está en juego ahora mismo; espera a que termine la ronda.");
     }
     await ctx.client.query("UPDATE yamboly_categories SET active = $2 WHERE id = $1", [id, active]);

@@ -10,6 +10,7 @@ import {
   SESSION_ID,
 } from "@/lib/yamboly-db";
 import { getPool } from "@/lib/db";
+import { tiebreakOutcome } from "@/lib/yamboly-rules";
 
 export const dynamic = "force-dynamic";
 
@@ -65,6 +66,9 @@ export async function GET(req: NextRequest) {
       toPosition: group.toPosition,
       participants: group.memberIds.map((id) => ({ id, full_name: names.get(id) ?? "" })),
     }));
+    const outcome = tiebreakOutcome(rankingData?.tieGroups ?? [], rankingData?.prizePlaces ?? prizes.length, session.tiebreak_round, session.max_tiebreak_questions);
+    const drawGroup = outcome.drawGroup;
+    const drawPending = finished && session.status === "ROUND_RANKING" && Boolean(drawGroup);
 
     // Respuestas de la pregunta en pantalla: las de desempate se guardan aparte y no suman puntos.
     const answersTable = session.tiebreak_round > 0 ? "yamboly_tiebreak_answers" : "yamboly_answers";
@@ -158,6 +162,7 @@ export async function GET(req: NextRequest) {
         answeringDurationSec: session.answering_duration_sec,
         pointsPerCorrect: session.points_per_correct,
         tieThresholdMs: session.tie_threshold_ms,
+        maxTiebreakQuestions: session.max_tiebreak_questions,
         difficultySequence: session.difficulty_sequence,
       },
       categories,
@@ -175,6 +180,9 @@ export async function GET(req: NextRequest) {
         round: session.tiebreak_round,
         contenders: contendersRes?.rows ?? [],
         required: finished && relevantTies.length > 0,
+        limitReached: outcome.limitReached,
+        drawPending,
+        drawParticipants: drawPending && drawGroup ? drawGroup.memberIds.map((id) => ({ id, full_name: names.get(id) ?? "" })) : [],
         groups: relevantTies,
       },
       participant,
